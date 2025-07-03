@@ -8,8 +8,13 @@ import (
 	"time"
 )
 
-var currentScreen = "ui_Boot_Screen"
 var backlightState = 0 // 0 - NORMAL, 1 - DIMMED, 2 - OFF
+
+var (
+	currentScreen   = "ui_Boot_Screen"
+	displayedTexts  = make(map[string]string)
+	screenStateLock = sync.Mutex{}
+)
 
 var (
 	dimTicker *time.Ticker
@@ -21,6 +26,8 @@ const (
 	backlightControlClass string = "/sys/class/backlight/backlight/brightness"
 )
 
+// do not call this function directly, use switchToScreenIfDifferent instead
+// this function is not thread safe
 func switchToScreen(screen string) {
 	_, err := CallDisplayCtrlAction("lv_scr_load", map[string]interface{}{"obj": screen})
 	if err != nil {
@@ -29,8 +36,6 @@ func switchToScreen(screen string) {
 	}
 	currentScreen = screen
 }
-
-var displayedTexts = make(map[string]string)
 
 func lvObjSetState(objName string, state string) (*CtrlResponse, error) {
 	return CallDisplayCtrlAction("lv_obj_set_state", map[string]interface{}{"obj": objName, "state": state})
@@ -81,6 +86,9 @@ func lvObjSetStyleBgColor(objName string, color string) (*CtrlResponse, error) {
 }
 
 func updateLabelIfChanged(objName string, newText string) {
+	screenStateLock.Lock()
+	defer screenStateLock.Unlock()
+
 	if newText != "" && newText != displayedTexts[objName] {
 		_, _ = lvLabelSetText(objName, newText)
 		displayedTexts[objName] = newText
@@ -88,10 +96,21 @@ func updateLabelIfChanged(objName string, newText string) {
 }
 
 func switchToScreenIfDifferent(screenName string) {
+	screenStateLock.Lock()
+	defer screenStateLock.Unlock()
+
 	if currentScreen != screenName {
 		displayLogger.Info().Str("from", currentScreen).Str("to", screenName).Msg("switching screen")
 		switchToScreen(screenName)
 	}
+}
+
+func clearDisplayState() {
+	screenStateLock.Lock()
+	defer screenStateLock.Unlock()
+
+	displayedTexts = make(map[string]string)
+	currentScreen = "ui_Boot_Screen"
 }
 
 var (
