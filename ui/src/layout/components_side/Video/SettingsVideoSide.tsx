@@ -726,13 +726,13 @@ export default function SettingsVideoSide() {
           description={$at("Adjust the EDID settings for the display")}
         >
           <Select
-            className={isMobile ? "w-full bg-transparent" : ""}
+            className={isMobile ? "w-full bg-transparent" : "min-w-[200px]"}
 
-            defaultValue={customEdidValue ? "custom" : edid || "asd"}
-            value={customEdidValue ? "custom" : edid || "asd"}
+            defaultValue={customEdidValue ? "custom" : edid || undefined}
+            value={customEdidValue ? "custom" : edid || undefined}
+            placeholder="Select EDID"
             optionLabelProp={"label"}
             onChange={e => {
-                  console.log(e)
               if (e === "custom") {
                 setEdid("custom");
                 setCustomEdidValue("");
