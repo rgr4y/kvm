@@ -195,6 +195,21 @@ interface RTCState {
 
   serialConsole: RTCDataChannel | null;
   setSerialConsole: (channel: RTCDataChannel | null) => void;
+
+  hidRpcDisabled: boolean;
+  setHidRpcDisabled: (disabled: boolean) => void;
+
+  rpcHidProtocolVersion: number | null;
+  setRpcHidProtocolVersion: (version: number | null) => void;
+
+  rpcHidChannel: RTCDataChannel | null;
+  setRpcHidChannel: (channel: RTCDataChannel) => void;
+
+  rpcHidUnreliableChannel: RTCDataChannel | null;
+  setRpcHidUnreliableChannel: (channel: RTCDataChannel) => void;
+
+  rpcHidUnreliableNonOrderedChannel: RTCDataChannel | null;
+  setRpcHidUnreliableNonOrderedChannel: (channel: RTCDataChannel) => void;
 }
 
 export const useRTCStore = create<RTCState>(set => ({
@@ -275,6 +290,21 @@ export const useRTCStore = create<RTCState>(set => ({
 
  serialConsole: null,
   setSerialConsole: channel => set({ serialConsole: channel }),
+
+  hidRpcDisabled: false,
+  setHidRpcDisabled: disabled => set({ hidRpcDisabled: disabled }),
+
+  rpcHidProtocolVersion: null,
+  setRpcHidProtocolVersion: version => set({ rpcHidProtocolVersion: version }),
+
+  rpcHidChannel: null,
+  setRpcHidChannel: channel => set({ rpcHidChannel: channel }),
+
+  rpcHidUnreliableChannel: null,
+  setRpcHidUnreliableChannel: channel => set({ rpcHidUnreliableChannel: channel }),
+
+  rpcHidUnreliableNonOrderedChannel: null,
+  setRpcHidUnreliableNonOrderedChannel: channel => set({ rpcHidUnreliableNonOrderedChannel: channel }),
 }));
 
 interface MouseMove {
@@ -556,6 +586,9 @@ export const useMountMediaStore = create<MountMediaState>(set => ({
   setErrorMessage: message => set({ errorMessage: message }),
 }));
 
+export const hidKeyBufferSize = 6;
+export const hidErrorRollOver = 0x01;
+
 export interface KeyboardLedState {
   num_lock: boolean;
   caps_lock: boolean;
@@ -570,6 +603,11 @@ const defaultKeyboardLedState: KeyboardLedState = {
   compose: false,
   kana: false,
 };
+
+export interface KeysDownState {
+  modifier: number;
+  keys: number[];
+}
 
 export interface HidState {
   activeKeys: number[];
@@ -598,8 +636,8 @@ export interface HidState {
   keyboardLedStateSyncAvailable: boolean;
   setKeyboardLedStateSyncAvailable: (available: boolean) => void;
 
-  keysDownState?: { modifier: number; keys: number[] };
-  setKeysDownState: (state: { modifier: number; keys: number[] }) => void;
+  keysDownState?: KeysDownState;
+  setKeysDownState: (state: KeysDownState) => void;
 
   isVirtualKeyboardEnabled: boolean;
   setVirtualKeyboardEnabled: (enabled: boolean) => void;
