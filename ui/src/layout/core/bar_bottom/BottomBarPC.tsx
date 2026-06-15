@@ -107,14 +107,20 @@ export default function BottomBarPC() {
     <div className={`${dark_bg2_style} border-t border-t-slate-800/30 text-slate-800 dark:border-t-slate-300/20 dark:text-white`}>
       <div className="flex flex-wrap items-stretch justify-between gap-1 h-[24px] ">
         <div className="flex items-center">
-          <div className="flex flex-wrap items-center pl-2 gap-x-4">
-            <Text style={{ fontSize: 12 }} title={hostname}>{__BUILD_HASH__}:</Text>
+          <div className="flex items-center h-full">
+            <div className="flex items-center h-[24px] px-2" style={{ fontSize: 12 }}>
+              <span title={hostname}>{__BUILD_HASH__}:</span>
+            </div>
+            <div style={{ width: "1px", height: "100%" }}
+                 className={"bg-[rgba(229,229,229,1)] dark:bg-[rgba(56,56,56,1)]"} />
 
             <ConnectionStatusButton
               icon={hdmiState === "ready" ? <Hdml2SVG fontSize={16} /> : <HdmlSVG fontSize={16} />}
               text={$at("HDMI")}
               isActive={hdmiState === "ready"}
             />
+            <div style={{ width: "1px", height: "100%" }}
+                 className={"bg-[rgba(229,229,229,1)] dark:bg-[rgba(56,56,56,1)]"} />
 
             <BottomPopoverButton
               buttonIconNode={usbState === "configured" ? <Usb2SVG fontSize={16} /> : <UsbSVG fontSize={16} />}
@@ -123,12 +129,16 @@ export default function BottomBarPC() {
               panelContent={<UsbStatusPanel />}
               align="left"
             />
+            <div style={{ width: "1px", height: "100%" }}
+                 className={"bg-[rgba(229,229,229,1)] dark:bg-[rgba(56,56,56,1)]"} />
 
             <VpnStatusButton
               text={$at("TailScale")}
               peerState={peerConnectionState}
               vpnState={tailScaleConnectionState}
             />
+            <div style={{ width: "1px", height: "100%" }}
+                 className={"bg-[rgba(229,229,229,1)] dark:bg-[rgba(56,56,56,1)]"} />
 
             {showPressedKeys && (
               <PressedKeysDisplay
@@ -288,14 +298,14 @@ interface ConnectionStatusButtonProps {
 function ConnectionStatusButton({ icon, text, isActive }: ConnectionStatusButtonProps) {
   return (
     <div
-      className="flex items-center gap-1"
+      className="flex items-center gap-1 h-[24px] px-2"
       style={{
         color: isActive ? "rgba(0, 205, 27, 1)" : "inherit",
         fontSize: 12,
       }}
     >
       {icon}
-      {text}
+      <span style={{ position: "relative", top: "1px" }}>{text}</span>
     </div>
   );
 }
