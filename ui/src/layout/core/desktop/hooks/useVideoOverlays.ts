@@ -46,7 +46,7 @@ export const useVideoOverlays = (
 
   const shouldHideVideo = isVideoLoading || hdmiError || (videoStream.peerConnectionState !== "connected" && !forceHttp);
   const showConnectionOverlays = videoStream.peerConnectionState === "connected" || forceHttp;
-  const showLoadingOverlay = isVideoLoading;
+  const showLoadingOverlay = isVideoLoading && !hdmiError;
   const showHDMIError = hdmiError;
 
   return {
