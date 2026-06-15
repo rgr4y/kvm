@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { isMobile } from "react-device-detect";
 
 import { useJsonRpc } from "@/hooks/useJsonRpc";
+import { useHidRpc } from "@/hooks/useHidRpc";
 import { useMouseStore, useSettingsStore, useVideoStore, useHidStore } from "@/hooks/stores";
 
 import { usePointerLock } from "./usePointerLock";
@@ -25,6 +26,7 @@ export const useMouseEvents = (
   const { setMousePosition, setMouseMove } = useMouseStore();
   const { width: videoWidth, height: videoHeight } = useVideoStore();
   const isReinitializingGadget = useHidStore(state => state.isReinitializingGadget);
+  const { reportAbsMouseEvent, reportRelMouseEvent, rpcHidReady } = useHidRpc();
   const touchDragActiveRef = useRef(false);
 
   const calcDelta = (pos: number) => (Math.abs(pos) < 10 ? pos * 2 : pos);
@@ -36,10 +38,14 @@ export const useMouseEvents = (
       if (isReinitializingGadget) return;
       const dx = calcDelta(x);
       const dy = calcDelta(y);
-      send("relMouseReport", { dx, dy, buttons });
+      if (rpcHidReady) {
+        reportRelMouseEvent(dx, dy, buttons);
+      } else {
+        send("relMouseReport", { dx, dy, buttons });
+      }
       setMouseMove({ x, y, buttons });
     },
-    [send, setMouseMove, settings.mouseMode, isReinitializingGadget],
+    [send, setMouseMove, settings.mouseMode, isReinitializingGadget, rpcHidReady, reportRelMouseEvent],
   );
 
   const sendAbsMouseMovement = useCallback(
@@ -47,10 +53,14 @@ export const useMouseEvents = (
       if (settings.mouseMode !== "absolute") return;
       // Don't send mouse events while reinitializing gadget
       if (isReinitializingGadget) return;
-      send("absMouseReport", { x, y, buttons });
+      if (rpcHidReady) {
+        reportAbsMouseEvent(x, y, buttons);
+      } else {
+        send("absMouseReport", { x, y, buttons });
+      }
       setMousePosition(x, y);
     },
-    [send, setMousePosition, settings.mouseMode, isReinitializingGadget],
+    [send, setMousePosition, settings.mouseMode, isReinitializingGadget, rpcHidReady, reportAbsMouseEvent],
   );
 
   const sendVirtualRelativeMovement = useCallback(
