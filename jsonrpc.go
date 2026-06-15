@@ -1465,6 +1465,20 @@ func rpcSetAudioMode(mode string) error {
 	}
 
 	if config.AudioMode != "disabled" {
+		// Start audio binary on-demand (once) if it hasn't been started yet
+		var startErr error
+		audioStarted.Do(func() {
+			if err := StartAudioCtrlSocketServer(); err != nil {
+				startErr = fmt.Errorf("failed to start audio ctrl socket: %w", err)
+				return
+			}
+			if err := ExtractAndRunAudioBin(); err != nil {
+				startErr = fmt.Errorf("failed to start audio binary: %w", err)
+			}
+		})
+		if startErr != nil {
+			return startErr
+		}
 		StartNtpAudioServer(handleAudioClient)
 	} else {
 		StopNtpAudioServer()

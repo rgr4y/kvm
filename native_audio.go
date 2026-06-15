@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -73,7 +75,7 @@ func CallAudioCtrlAction(action string, params map[string]interface{}) (*CtrlRes
 
 func WriteAudioCtrlMessage(message []byte) error {
 	if audioSocketConn == nil {
-		return fmt.Errorf("audio socket not conn ected")
+		return fmt.Errorf("audio socket not connected")
 	}
 	_, err := audioSocketConn.Write(message)
 	return err
@@ -82,12 +84,13 @@ func WriteAudioCtrlMessage(message []byte) error {
 var audioCtrlSocketListener net.Listener
 
 var audioCtrlClientConnected = make(chan struct{})
+var audioCtrlClientOnce sync.Once
 
 func waitAudioCtrlClientConnected() {
 	<-audioCtrlClientConnected
 }
 
-func StartAudioSocketServer(socketPath string, handleClient func(net.Conn), isCtrl bool) net.Listener {
+func StartAudioSocketServer(socketPath string, handleClient func(net.Conn), isCtrl bool) (net.Listener, error) {
 	scopedLogger := audioLogger.With().
 		Str("socket_path", socketPath).
 		Logger()
@@ -95,15 +98,13 @@ func StartAudioSocketServer(socketPath string, handleClient func(net.Conn), isCt
 	// Remove the socket file if it already exists
 	if _, err := os.Stat(socketPath); err == nil {
 		if err := os.Remove(socketPath); err != nil {
-			scopedLogger.Warn().Err(err).Msg("failed to remove existing socket file")
-			os.Exit(1)
+			return nil, fmt.Errorf("failed to remove existing socket file %s: %w", socketPath, err)
 		}
 	}
 
 	listener, err := net.Listen("unixpacket", socketPath)
 	if err != nil {
-		scopedLogger.Warn().Err(err).Msg("failed to start server")
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to listen on %s: %w", socketPath, err)
 	}
 
 	scopedLogger.Info().Msg("server listening")
@@ -111,33 +112,46 @@ func StartAudioSocketServer(socketPath string, handleClient func(net.Conn), isCt
 	go func() {
 		for {
 			conn, err := listener.Accept()
-
 			if err != nil {
+				// Check if listener was closed (shutdown)
+				select {
+				case <-appCtx.Done():
+					return
+				default:
+				}
 				scopedLogger.Warn().Err(err).Msg("failed to accept socket")
 				continue
 			}
 			if isCtrl {
-				// check if the channel is closed
-				select {
-				case <-audioCtrlClientConnected:
-					scopedLogger.Debug().Msg("audio ctrl client reconnected")
-				default:
+				audioCtrlClientOnce.Do(func() {
 					close(audioCtrlClientConnected)
 					scopedLogger.Debug().Msg("first audio ctrl socket client connected")
-				}
+				})
 			}
 
-			//conn.Write([]byte("[handleAudioCtrlClient]audio sock test"))
 			go handleClient(conn)
 		}
 	}()
 
-	return listener
+	// Close listener on app shutdown
+	go func() {
+		<-appCtx.Done()
+		listener.Close()
+	}()
+
+	return listener, nil
 }
 
-func StartAudioCtrlSocketServer() {
-	audioCtrlSocketListener = StartAudioSocketServer("/var/run/kvm_audio.sock", handleAudioCtrlClient, true)
+var audioStarted sync.Once
+
+func StartAudioCtrlSocketServer() error {
+	listener, err := StartAudioSocketServer("/var/run/kvm_audio.sock", handleAudioCtrlClient, true)
+	if err != nil {
+		return err
+	}
+	audioCtrlSocketListener = listener
 	audioLogger.Debug().Msg("audio ctrl sock started")
+	return nil
 }
 
 func handleAudioCtrlClient(conn net.Conn) {
@@ -188,6 +202,87 @@ func handleAudioCtrlClient(conn net.Conn) {
 	scopedLogger.Debug().Msg("audio sock disconnected")
 }
 
+// killStaleAudioProcesses finds and kills any existing kvm_audio processes
+// that may have been left behind by a previous kvm_app instance. This prevents
+// zombie processes from accumulating on the memory-constrained device.
+func killStaleAudioProcesses() {
+	binaryName := "kvm_audio"
+
+	// Read /proc to find matching processes (more reliable than pkill on embedded systems)
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		audioLogger.Warn().Err(err).Msg("failed to read /proc for zombie detection")
+		return
+	}
+
+	ourPid := os.Getpid()
+	killed := 0
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue // not a PID directory
+		}
+
+		// Read the process comm (basename of executable)
+		commBytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+		if err != nil {
+			continue // process may have already exited
+		}
+		comm := strings.TrimSpace(string(commBytes))
+		if comm != binaryName {
+			continue
+		}
+
+		// Don't kill ourselves or our own tracked child
+		if pid == ourPid {
+			continue
+		}
+		audioCmdLock.Lock()
+		isOurChild := audioCmd != nil && audioCmd.Process != nil && audioCmd.Process.Pid == pid
+		audioCmdLock.Unlock()
+		if isOurChild {
+			continue
+		}
+
+		// Check process state — look for zombies (state Z) and running processes
+		statusBytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+		if err != nil {
+			continue
+		}
+		state := "unknown"
+		for _, line := range strings.Split(string(statusBytes), "\n") {
+			if strings.HasPrefix(line, "State:") {
+				state = strings.TrimSpace(strings.TrimPrefix(line, "State:"))
+				break
+			}
+		}
+
+		audioLogger.Info().
+			Int("pid", pid).
+			Str("state", state).
+			Msg("killing stale kvm_audio process")
+
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			continue
+		}
+		_ = proc.Kill()
+		// Wait to reap the zombie
+		_, _ = proc.Wait()
+		killed++
+	}
+
+	if killed > 0 {
+		audioLogger.Info().Int("count", killed).Msg("cleaned up stale kvm_audio processes")
+		// Brief pause to let the OS fully clean up
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 func startAudioBinaryWithLock(binaryPath string) (*exec.Cmd, error) {
 	audioCmdLock.Lock()
 	defer audioCmdLock.Unlock()
@@ -200,37 +295,59 @@ func startAudioBinaryWithLock(binaryPath string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func restartAudioBinary(binaryPath string) error {
-	time.Sleep(10 * time.Second)
-	// restart the binary
-	audioLogger.Info().Msg("restarting audio_video binary")
-	cmd, err := startAudioBinary(binaryPath)
-	if err != nil {
-		audioLogger.Warn().Err(err).Msg("failed to restart binary")
-	}
-	audioCmd = cmd
-	return err
-}
-
 func superviseAudioBinary(binaryPath string) error {
 	audioCmdLock.Lock()
-	defer audioCmdLock.Unlock()
+	cmd := audioCmd
+	audioCmdLock.Unlock()
 
-	if audioCmd == nil || audioCmd.Process == nil {
+	if cmd == nil || cmd.Process == nil {
+		// No tracked process — kill any stale ones and restart
+		killStaleAudioProcesses()
 		return restartAudioBinary(binaryPath)
 	}
 
-	err := audioCmd.Wait()
+	// Wait blocks until the process exits — does NOT hold the lock
+	err := cmd.Wait()
 
 	if err == nil {
-		audioLogger.Info().Err(err).Msg("kvm_audio binary exited with no error")
+		audioLogger.Info().Msg("kvm_audio binary exited cleanly")
 	} else if exiterr, ok := err.(*exec.ExitError); ok {
 		audioLogger.Warn().Int("exit_code", exiterr.ExitCode()).Msg("kvm_audio binary exited with error")
 	} else {
 		audioLogger.Warn().Err(err).Msg("kvm_audio binary exited with unknown error")
 	}
 
+	// Clean up any zombie children before restarting
+	killStaleAudioProcesses()
 	return restartAudioBinary(binaryPath)
+}
+
+func restartAudioBinary(binaryPath string) error {
+	// Check if we should stop
+	select {
+	case <-appCtx.Done():
+		return nil
+	default:
+	}
+
+	audioLogger.Info().Msg("restarting kvm_audio binary in 10s")
+	select {
+	case <-time.After(10 * time.Second):
+	case <-appCtx.Done():
+		return nil
+	}
+
+	audioCmdLock.Lock()
+	defer audioCmdLock.Unlock()
+
+	cmd, err := startAudioBinary(binaryPath)
+	if err != nil {
+		audioLogger.Warn().Err(err).Msg("failed to restart binary")
+		return err
+	}
+	audioCmd = cmd
+	audioLogger.Info().Int("pid", cmd.Process.Pid).Msg("kvm_audio binary restarted")
+	return nil
 }
 
 func ExtractAndRunAudioBin() error {
@@ -240,13 +357,17 @@ func ExtractAndRunAudioBin() error {
 	if err := os.Chmod(binaryPath, 0755); err != nil {
 		return fmt.Errorf("failed to make binary executable: %w", err)
 	}
+
+	// Kill any stale kvm_audio processes from previous runs
+	killStaleAudioProcesses()
+
 	// Run the binary in the background
 	cmd, err := startAudioBinaryWithLock(binaryPath)
 	if err != nil {
 		return fmt.Errorf("failed to start binary: %w", err)
 	}
 
-	// check if the binary is still running every 10 seconds
+	// Supervisor goroutine — restarts on crash, respects appCtx
 	go func() {
 		for {
 			select {
@@ -257,19 +378,26 @@ func ExtractAndRunAudioBin() error {
 				err := superviseAudioBinary(binaryPath)
 				if err != nil {
 					audioLogger.Warn().Err(err).Msg("failed to supervise audio binary")
-					time.Sleep(1 * time.Second) // Add a short delay to prevent rapid successive calls
+					// Wait before retrying, but respect cancellation
+					select {
+					case <-time.After(1 * time.Second):
+					case <-appCtx.Done():
+						return
+					}
 				}
 			}
 		}
 	}()
 
+	// Kill the process when app shuts down
 	go func() {
 		<-appCtx.Done()
-		audioLogger.Info().Int("pid", cmd.Process.Pid).Msg("killing process")
-		err := cmd.Process.Kill()
-		if err != nil {
-			audioLogger.Warn().Err(err).Msg("failed to kill process")
-			return
+		audioCmdLock.Lock()
+		cmd := audioCmd
+		audioCmdLock.Unlock()
+		if cmd != nil && cmd.Process != nil {
+			audioLogger.Info().Int("pid", cmd.Process.Pid).Msg("killing kvm_audio on shutdown")
+			_ = cmd.Process.Kill()
 		}
 	}()
 

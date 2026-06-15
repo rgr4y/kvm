@@ -120,8 +120,12 @@ func Main() {
 		}
 	}
 
-	// Initialize native audio socket server
-	StartAudioCtrlSocketServer()
+	// Initialize native audio socket server (only if audio enabled)
+	if config.AudioMode != "disabled" {
+		if err := StartAudioCtrlSocketServer(); err != nil {
+			logger.Fatal().Err(err).Msg("failed to start audio ctrl socket server")
+		}
+	}
 
 	StartVpnCtrlSocketServer()
 
@@ -142,10 +146,16 @@ func Main() {
 			//TODO: prepare an error message screen buffer to show on kvm screen
 		}
 
-		err = ExtractAndRunAudioBin()
-		if err != nil {
-			logger.Warn().Err(err).Msg("failed to extract and run audio bin")
-			//TODO: prepare an error message screen buffer to show on kvm screen
+		if config.AudioMode != "disabled" {
+			// Mark as started so rpcSetAudioMode won't double-start
+			audioStarted.Do(func() {
+				err = ExtractAndRunAudioBin()
+				if err != nil {
+					logger.Warn().Err(err).Msg("failed to extract and run audio bin")
+				}
+			})
+		} else {
+			logger.Info().Msg("audio disabled, skipping kvm_audio binary startup")
 		}
 
 		err = ExtractAndRunVpnBin()
