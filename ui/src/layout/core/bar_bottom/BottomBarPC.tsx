@@ -318,7 +318,7 @@ function VpnStatusButton({ text, peerState, vpnState }: VpnStatusButtonProps) {
 
   return (
     <div
-      className="flex items-center gap-1"
+      className="flex items-center h-[24px] px-2 gap-1"
       style={{ fontSize: 12, color: isActive ? "rgba(0, 205, 27, 1)" : "inherit" }}
     >
       <div style={{
@@ -327,7 +327,7 @@ function VpnStatusButton({ text, peerState, vpnState }: VpnStatusButtonProps) {
         borderRadius: "50%",
         backgroundColor: getVpnColor(),
       }} />
-      {text}
+      <span style={{ position: "relative", top: "1px" }}>{text}</span>
     </div>
   );
 }
