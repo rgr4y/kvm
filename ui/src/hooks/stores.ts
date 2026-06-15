@@ -370,7 +370,10 @@ export const useVideoStore = create<VideoState>(set => ({
     } else if (error) {
       return set({ hdmiState: error });
     } else {
-      return set({ hdmiState: "connecting" });
+      // Backend sends {ready: false, error: ""} when HDMI disconnected
+      // but native binary hasn't reported a specific error yet.
+      // Treat as no_signal so overlay shows immediately.
+      return set({ hdmiState: "no_signal" });
     }
   },
 }));
