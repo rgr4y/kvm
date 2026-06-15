@@ -63,7 +63,7 @@ type UsbGadget struct {
 	relMouseHidFile *os.File
 	relMouseLock    sync.Mutex
 
-	keyboardState       KeyboardState
+	keyboardStateRaw    byte
 	keyboardStateLock   sync.Mutex
 	keyboardStateCtx    context.Context
 	keyboardStateCancel context.CancelFunc
@@ -80,10 +80,13 @@ type UsbGadget struct {
 	txLock sync.Mutex
 
 	onKeyboardStateChange *func(state KeyboardState)
+	onKeysDownChange      *func(state KeysDownState)
+	onKeepAliveReset      *func()
 	onHidDeviceMissing    *func(device string, err error)
 
-	keysDownState       KeysDownState
-	autoReleaseTimers   []autoReleaseTimer
+	keysDownState        KeysDownState
+	kbdAutoReleaseTimers map[byte]*time.Timer
+	kbdAutoReleaseLock   sync.Mutex
 
 	log *zerolog.Logger
 
@@ -132,7 +135,6 @@ func newUsbGadget(name string, configMap map[string]gadgetConfigItem, enabledDev
 		txLock:              sync.Mutex{},
 		keyboardStateCtx:    keyboardCtx,
 		keyboardStateCancel: keyboardCancel,
-		keyboardState:       KeyboardState{},
 		enabledDevices:      *enabledDevices,
 		lastUserInput:       time.Now(),
 		log:                 logger,
@@ -142,6 +144,8 @@ func newUsbGadget(name string, configMap map[string]gadgetConfigItem, enabledDev
 		logSuppressionCounter: make(map[string]int),
 
 		absMouseAccumulatedWheelY: 0,
+
+		kbdAutoReleaseTimers: make(map[byte]*time.Timer),
 	}
 	if err := g.Init(); err != nil {
 		logger.Error().Err(err).Msg("failed to init USB gadget (will retry later)")
