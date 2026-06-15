@@ -189,7 +189,7 @@ function TerminalSerial({dataChannel} : {
           <div ref={ref} style={{ height: "100%", width: "100%" }} />
           
           <FloatButton   icon={open?<FBSvg2 />:<FBSvg1 />} type={open?"default":"primary"} style={{ insetInlineEnd: 24,top:24,backgroundColor:"transparent",position:"absolute",zIndex:1001 }} onClick={showDrawer} 
-            tooltip={<div>{open ? "关闭设置" : "打开设置"}</div>}
+            tooltip={<div>{open ? "Close Settings" : "Open Settings"}</div>}
           />
         </div>
         <Drawer
