@@ -34,14 +34,15 @@ interface SettingsDialogProps {
 const SettingsModalPC: React.FC<SettingsDialogProps> = ({ visible = true }) => {
   const settingsTab = useUiStore(state => state.settingsTab);
   const setSettingsTab = useUiStore(state => state.setSettingsTab);
-  const [selectedMenu, setSelectedMenu] = useState<string>(settingsTab || "general");
+  const sidebarView = useUiStore(state => state.sidebarView);
+  const [selectedMenu, setSelectedMenu] = useState<string>("general");
 
   React.useEffect(() => {
-    if (settingsTab) {
+    if (sidebarView === "SettingsModal" && settingsTab) {
       setSelectedMenu(settingsTab);
       setSettingsTab(null);
     }
-  }, [settingsTab, setSettingsTab]);
+  }, [sidebarView, settingsTab, setSettingsTab]);
   const { $at } = useReactAt();
   const menuItems: MenuItem[] = [
     { key: "general", label: "General", icon: <SettingOutlined /> },
