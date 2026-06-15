@@ -93,7 +93,7 @@ export default function BottomBarPC() {
     if (forceHttp) {
       return "N/A fps";
     }
-    return `${Math.round(fps)}fps`;
+    return `${Math.round(fps || 0)}fps`;
   }, [forceHttp, fps]);
   useEffect(() => {
     send("getNetworkSettings", {}, resp => {
