@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,6 +25,11 @@ var vpnOngoingRequests = make(map[int32]chan *CtrlResponse)
 var vpnLock = &sync.Mutex{}
 
 func CallVpnCtrlAction(action string, params map[string]interface{}) (*CtrlResponse, error) {
+	// Start VPN binary on-demand if not already running
+	if err := EnsureVpnRunning(); err != nil {
+		return nil, fmt.Errorf("failed to ensure vpn is running: %w", err)
+	}
+
 	vpnLock.Lock()
 	defer vpnLock.Unlock()
 	ctrlAction := CtrlAction{
@@ -73,7 +80,7 @@ func CallVpnCtrlAction(action string, params map[string]interface{}) (*CtrlRespo
 
 func WriteVpnCtrlMessage(message []byte) error {
 	if vpnSocketConn == nil {
-		return fmt.Errorf("vpn socket not conn ected")
+		return fmt.Errorf("vpn socket not connected")
 	}
 	_, err := vpnSocketConn.Write(message)
 	return err
@@ -82,12 +89,13 @@ func WriteVpnCtrlMessage(message []byte) error {
 var vpnCtrlSocketListener net.Listener
 
 var vpnCtrlClientConnected = make(chan struct{})
+var vpnCtrlClientOnce sync.Once
 
 func waitVpnCtrlClientConnected() {
 	<-vpnCtrlClientConnected
 }
 
-func StartVpnSocketServer(socketPath string, handleClient func(net.Conn), isCtrl bool) net.Listener {
+func StartVpnSocketServer(socketPath string, handleClient func(net.Conn), isCtrl bool) (net.Listener, error) {
 	scopedLogger := vpnLogger.With().
 		Str("socket_path", socketPath).
 		Logger()
@@ -95,15 +103,13 @@ func StartVpnSocketServer(socketPath string, handleClient func(net.Conn), isCtrl
 	// Remove the socket file if it already exists
 	if _, err := os.Stat(socketPath); err == nil {
 		if err := os.Remove(socketPath); err != nil {
-			scopedLogger.Warn().Err(err).Msg("failed to remove existing socket file")
-			os.Exit(1)
+			return nil, fmt.Errorf("failed to remove existing socket file %s: %w", socketPath, err)
 		}
 	}
 
 	listener, err := net.Listen("unixpacket", socketPath)
 	if err != nil {
-		scopedLogger.Warn().Err(err).Msg("failed to start server")
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to listen on %s: %w", socketPath, err)
 	}
 
 	scopedLogger.Info().Msg("server listening")
@@ -111,33 +117,44 @@ func StartVpnSocketServer(socketPath string, handleClient func(net.Conn), isCtrl
 	go func() {
 		for {
 			conn, err := listener.Accept()
-
 			if err != nil {
+				// Check if listener was closed (shutdown)
+				select {
+				case <-appCtx.Done():
+					return
+				default:
+				}
 				scopedLogger.Warn().Err(err).Msg("failed to accept socket")
 				continue
 			}
 			if isCtrl {
-				// check if the channel is closed
-				select {
-				case <-vpnCtrlClientConnected:
-					scopedLogger.Debug().Msg("vpn ctrl client reconnected")
-				default:
+				vpnCtrlClientOnce.Do(func() {
 					close(vpnCtrlClientConnected)
 					scopedLogger.Debug().Msg("first vpn ctrl socket client connected")
-				}
+				})
 			}
 
-			//conn.Write([]byte("[handleVpnCtrlClient]vpn sock test"))
 			go handleClient(conn)
 		}
 	}()
 
-	return listener
+	// Close listener on app shutdown
+	go func() {
+		<-appCtx.Done()
+		listener.Close()
+	}()
+
+	return listener, nil
 }
 
-func StartVpnCtrlSocketServer() {
-	vpnCtrlSocketListener = StartVpnSocketServer("/var/run/kvm_vpn.sock", handleVpnCtrlClient, true)
+func StartVpnCtrlSocketServer() error {
+	listener, err := StartVpnSocketServer("/var/run/kvm_vpn.sock", handleVpnCtrlClient, true)
+	if err != nil {
+		return err
+	}
+	vpnCtrlSocketListener = listener
 	vpnLogger.Debug().Msg("vpn ctrl sock started")
+	return nil
 }
 
 func handleVpnCtrlClient(conn net.Conn) {
@@ -187,6 +204,80 @@ func handleVpnCtrlClient(conn net.Conn) {
 	scopedLogger.Debug().Msg("vpn sock disconnected")
 }
 
+// killStaleVpnProcesses finds and kills any existing kvm_vpn processes
+// left behind by a previous kvm_app instance.
+func killStaleVpnProcesses() {
+	binaryName := "kvm_vpn"
+
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		vpnLogger.Warn().Err(err).Msg("failed to read /proc for zombie detection")
+		return
+	}
+
+	ourPid := os.Getpid()
+	killed := 0
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+
+		commBytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+		if err != nil {
+			continue
+		}
+		comm := strings.TrimSpace(string(commBytes))
+		if comm != binaryName {
+			continue
+		}
+
+		if pid == ourPid {
+			continue
+		}
+		vpnCmdLock.Lock()
+		isOurChild := vpnCmd != nil && vpnCmd.Process != nil && vpnCmd.Process.Pid == pid
+		vpnCmdLock.Unlock()
+		if isOurChild {
+			continue
+		}
+
+		statusBytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+		if err != nil {
+			continue
+		}
+		state := "unknown"
+		for _, line := range strings.Split(string(statusBytes), "\n") {
+			if strings.HasPrefix(line, "State:") {
+				state = strings.TrimSpace(strings.TrimPrefix(line, "State:"))
+				break
+			}
+		}
+
+		vpnLogger.Info().
+			Int("pid", pid).
+			Str("state", state).
+			Msg("killing stale kvm_vpn process")
+
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			continue
+		}
+		_ = proc.Kill()
+		_, _ = proc.Wait()
+		killed++
+	}
+
+	if killed > 0 {
+		vpnLogger.Info().Int("count", killed).Msg("cleaned up stale kvm_vpn processes")
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 func startVpnBinaryWithLock(binaryPath string) (*exec.Cmd, error) {
 	vpnCmdLock.Lock()
 	defer vpnCmdLock.Unlock()
@@ -199,53 +290,102 @@ func startVpnBinaryWithLock(binaryPath string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func restartVpnBinary(binaryPath string) error {
-	time.Sleep(10 * time.Second)
-	// restart the binary
-	vpnLogger.Info().Msg("restarting vpn_video binary")
-	cmd, err := startVpnBinary(binaryPath)
-	if err != nil {
-		vpnLogger.Warn().Err(err).Msg("failed to restart binary")
-	}
-	vpnCmd = cmd
-	return err
-}
-
 func superviseVpnBinary(binaryPath string) error {
 	vpnCmdLock.Lock()
-	defer vpnCmdLock.Unlock()
+	cmd := vpnCmd
+	vpnCmdLock.Unlock()
 
-	if vpnCmd == nil || vpnCmd.Process == nil {
+	if cmd == nil || cmd.Process == nil {
+		killStaleVpnProcesses()
 		return restartVpnBinary(binaryPath)
 	}
 
-	err := vpnCmd.Wait()
+	err := cmd.Wait()
 
 	if err == nil {
-		vpnLogger.Info().Err(err).Msg("kvm_vpn binary exited with no error")
+		vpnLogger.Info().Msg("kvm_vpn binary exited cleanly")
 	} else if exiterr, ok := err.(*exec.ExitError); ok {
 		vpnLogger.Warn().Int("exit_code", exiterr.ExitCode()).Msg("kvm_vpn binary exited with error")
 	} else {
 		vpnLogger.Warn().Err(err).Msg("kvm_vpn binary exited with unknown error")
 	}
 
+	killStaleVpnProcesses()
 	return restartVpnBinary(binaryPath)
+}
+
+func restartVpnBinary(binaryPath string) error {
+	select {
+	case <-appCtx.Done():
+		return nil
+	default:
+	}
+
+	vpnLogger.Info().Msg("restarting kvm_vpn binary in 10s")
+	select {
+	case <-time.After(10 * time.Second):
+	case <-appCtx.Done():
+		return nil
+	}
+
+	vpnCmdLock.Lock()
+	defer vpnCmdLock.Unlock()
+
+	cmd, err := startVpnBinary(binaryPath)
+	if err != nil {
+		vpnLogger.Warn().Err(err).Msg("failed to restart binary")
+		return err
+	}
+	vpnCmd = cmd
+	vpnLogger.Info().Int("pid", cmd.Process.Pid).Msg("kvm_vpn binary restarted")
+	return nil
+}
+
+// vpnStarted ensures kvm_vpn binary + socket are started exactly once.
+var vpnStarted sync.Once
+
+// vpnNeedsRunning returns true if any VPN service has autostart enabled.
+func vpnNeedsRunning() bool {
+	return config.TailScaleAutoStart ||
+		config.ZeroTierAutoStart ||
+		config.FrpcAutoStart ||
+		config.EasytierAutoStart ||
+		config.VntAutoStart ||
+		config.CloudflaredAutoStart ||
+		config.WireguardAutoStart
+}
+
+// EnsureVpnRunning starts the VPN binary on-demand (once) if not already running.
+// Safe to call from any RPC handler.
+func EnsureVpnRunning() error {
+	var startErr error
+	vpnStarted.Do(func() {
+		if err := StartVpnCtrlSocketServer(); err != nil {
+			startErr = fmt.Errorf("failed to start vpn ctrl socket: %w", err)
+			return
+		}
+		if err := ExtractAndRunVpnBin(); err != nil {
+			startErr = fmt.Errorf("failed to start vpn binary: %w", err)
+		}
+	})
+	return startErr
 }
 
 func ExtractAndRunVpnBin() error {
 	binaryPath := "/userdata/picokvm/bin/kvm_vpn"
 
-	// Make the binary executable
 	if err := os.Chmod(binaryPath, 0755); err != nil {
 		return fmt.Errorf("failed to make binary executable: %w", err)
 	}
-	// Run the binary in the background
+
+	killStaleVpnProcesses()
+
 	cmd, err := startVpnBinaryWithLock(binaryPath)
 	if err != nil {
 		return fmt.Errorf("failed to start binary: %w", err)
 	}
 
-	// check if the binary is still running every 10 seconds
+	// Supervisor goroutine
 	go func() {
 		for {
 			select {
@@ -256,19 +396,25 @@ func ExtractAndRunVpnBin() error {
 				err := superviseVpnBinary(binaryPath)
 				if err != nil {
 					vpnLogger.Warn().Err(err).Msg("failed to supervise vpn binary")
-					time.Sleep(1 * time.Second) // Add a short delay to prevent rapid successive calls
+					select {
+					case <-time.After(1 * time.Second):
+					case <-appCtx.Done():
+						return
+					}
 				}
 			}
 		}
 	}()
 
+	// Kill on shutdown
 	go func() {
 		<-appCtx.Done()
-		vpnLogger.Info().Int("pid", cmd.Process.Pid).Msg("killing process")
-		err := cmd.Process.Kill()
-		if err != nil {
-			vpnLogger.Warn().Err(err).Msg("failed to kill process")
-			return
+		vpnCmdLock.Lock()
+		cmd := vpnCmd
+		vpnCmdLock.Unlock()
+		if cmd != nil && cmd.Process != nil {
+			vpnLogger.Info().Int("pid", cmd.Process.Pid).Msg("killing kvm_vpn on shutdown")
+			_ = cmd.Process.Kill()
 		}
 	}()
 

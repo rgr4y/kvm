@@ -127,7 +127,12 @@ func Main() {
 		}
 	}
 
-	StartVpnCtrlSocketServer()
+	// Initialize VPN socket server only if any VPN has autostart enabled
+	if vpnNeedsRunning() {
+		if err := StartVpnCtrlSocketServer(); err != nil {
+			logger.Fatal().Err(err).Msg("failed to start vpn ctrl socket server")
+		}
+	}
 
 	StartDisplayCtrlSocketServer()
 
@@ -158,10 +163,15 @@ func Main() {
 			logger.Info().Msg("audio disabled, skipping kvm_audio binary startup")
 		}
 
-		err = ExtractAndRunVpnBin()
-		if err != nil {
-			logger.Warn().Err(err).Msg("failed to extract and run vpn bin")
-			//TODO: prepare an error message screen buffer to show on kvm screen
+		if vpnNeedsRunning() {
+			vpnStarted.Do(func() {
+				err = ExtractAndRunVpnBin()
+				if err != nil {
+					logger.Warn().Err(err).Msg("failed to extract and run vpn bin")
+				}
+			})
+		} else {
+			logger.Info().Msg("no VPN autostart configured, skipping kvm_vpn binary startup")
 		}
 	}()
 
