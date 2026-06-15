@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useVideoStore, useSettingsStore} from "@/hooks/stores";
 
 import { useVideoStream } from "./useVideoStream";
 import { usePointerLock } from "./usePointerLock";
+
+const LOADING_TIMEOUT_MS = 15_000;
 
 export const useVideoOverlays = (
   videoStream: ReturnType<typeof useVideoStream>,
@@ -17,6 +19,19 @@ export const useVideoOverlays = (
   const forceHttp = useSettingsStore(state => state.forceHttp);
   const hdmiError = ["no_lock", "no_signal", "out_of_range"].includes(hdmiState);
   const isVideoLoading = !videoStream.isPlaying;
+
+  // Loading timeout — after 15s with no video, escalate to HDMI error overlay
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const rawShowLoading = isVideoLoading && !hdmiError;
+
+  useEffect(() => {
+    if (!rawShowLoading) {
+      setLoadingTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setLoadingTimedOut(true), LOADING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [rawShowLoading]);
 
   const showPointerLockBar = useMemo(() => {
     if (videoEffects.settings.mouseMode !== "relative") return false;
@@ -46,8 +61,11 @@ export const useVideoOverlays = (
 
   const shouldHideVideo = isVideoLoading || hdmiError || (videoStream.peerConnectionState !== "connected" && !forceHttp);
   const showConnectionOverlays = videoStream.peerConnectionState === "connected" || forceHttp;
-  const showLoadingOverlay = isVideoLoading && !hdmiError;
-  const showHDMIError = hdmiError;
+  const showLoadingOverlay = rawShowLoading && !loadingTimedOut;
+  const showHDMIError = hdmiError || loadingTimedOut;
+
+  // When loading timed out with no real HDMI error, show as no_signal
+  const effectiveHdmiState = loadingTimedOut && !hdmiError ? "no_signal" : hdmiState;
 
   return {
     forceHttp,
@@ -57,6 +75,7 @@ export const useVideoOverlays = (
     showLoadingOverlay,
     showHDMIError,
     shouldHideVideo,
-    hdmiState,
+    hdmiState: effectiveHdmiState,
+    framesReceived: videoStream.framesReceived,
   };
 };

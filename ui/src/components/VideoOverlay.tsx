@@ -41,9 +41,10 @@ function OverlayContent({ children }: OverlayContentProps) {
 
 interface LoadingOverlayProps {
   readonly show: boolean;
+  readonly framesReceived?: number;
 }
 
-export function LoadingVideoOverlay({ show }: LoadingOverlayProps) {
+export function LoadingVideoOverlay({ show, framesReceived = 0 }: LoadingOverlayProps) {
   const { $at } = useReactAt();
   return (
     <AnimatePresence>
@@ -59,13 +60,19 @@ export function LoadingVideoOverlay({ show }: LoadingOverlayProps) {
           }}
         >
           <OverlayContent>
-            <div className="flex flex-col items-center justify-center gap-y-1">
-              <div className="animate flex h-12 w-12 items-center justify-center">
+            <div className={`${isMobile ? "h-full w-full justify-center p-[24px]" : "w-[38%] p-[48px]"}
+               flex flex-col items-center gap-y-3 ${dark_bg2_style} border ${dark_bd_style}`}>
+              <div className="flex h-12 w-12 items-center justify-center">
                 <LoadingSpinner className="h-8 w-8 text-[rgba(22,152,217,1)] dark:text-[rgba(45,106,229,1)]" />
               </div>
-              <p className="text-center text-sm text-slate-700 dark:text-slate-300">
+              <h2 className={`text-xl font-bold ${dark_font_style}`}>
                 {$at("Loading video stream...")}
-              </p>
+              </h2>
+              <div className="text-center text-sm text-slate-700 dark:text-slate-300">
+                <p>
+                  {$at("Frames received:")} <span className="font-mono font-semibold text-black dark:text-white">{framesReceived}</span>
+                </p>
+              </div>
             </div>
           </OverlayContent>
         </motion.div>

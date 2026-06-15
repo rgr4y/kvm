@@ -9,12 +9,16 @@ export const useVideoStream = (
   audioElm: React.RefObject<HTMLAudioElement>
 ) => {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [framesReceived, setFramesReceived] = useState(0);
   const mediaStream = useRTCStore(state => state.mediaStream);
+  const peerConnection = useRTCStore(state => state.peerConnection);
   const peerConnectionState = useRTCStore(state => state.peerConnectionState);
   const setPeerConnectionState = useRTCStore(state => state.setPeerConnectionState);
   const forceHttp = useSettingsStore(state => state.forceHttp);
   const { setClientSize: setVideoClientSize, setSize: setVideoSize } = useVideoStore();
   const jmuxerRef = useRef<any>(null);
+  const httpFrameCountRef = useRef(0);
+  const frameResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateVideoSizeStore = useCallback((videoElm: HTMLVideoElement) => {
     setVideoClientSize(videoElm.clientWidth, videoElm.clientHeight);
@@ -224,6 +228,11 @@ export const useVideoStream = (
                 lastFrameTime = lastDataTime;
 
                 frameCount++;
+                httpFrameCountRef.current = frameCount;
+                // Throttle state updates to every 10 frames
+                if (frameCount % 10 === 0 || frameCount === 1) {
+                  setFramesReceived(frameCount);
+                }
                 if (frameCount === 1) {
                   hasReceivedDataRef.current = true;
                   console.log('[forceHttp] First frame received, size:', value.length, 'time since start:', lastDataTime - startTime, 'ms');
@@ -274,8 +283,47 @@ export const useVideoStream = (
     }
   }, [forceHttp, videoElm, audioElm, markAsPlaying, setPeerConnectionState]);
 
+  // WebRTC frame counting while loading
+  useEffect(() => {
+    if (forceHttp || isPlaying || !peerConnection) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const stats = await peerConnection.getStats();
+        stats.forEach(report => {
+          if (report.type === "inbound-rtp" && report.kind === "video") {
+            setFramesReceived(report.framesReceived ?? 0);
+          }
+        });
+      } catch {
+        // peerConnection may be closed
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [forceHttp, isPlaying, peerConnection]);
+
+  // Debounced frame count reset — wait 3s after overlay closes before clearing
+  useEffect(() => {
+    if (isPlaying) {
+      frameResetTimerRef.current = setTimeout(() => {
+        setFramesReceived(0);
+        httpFrameCountRef.current = 0;
+      }, 3000);
+    } else {
+      if (frameResetTimerRef.current) {
+        clearTimeout(frameResetTimerRef.current);
+        frameResetTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (frameResetTimerRef.current) clearTimeout(frameResetTimerRef.current);
+    };
+  }, [isPlaying]);
+
   return {
     isPlaying,
+    framesReceived,
     peerConnectionState,
     onVideoPlaying,
     handlePlayClick,

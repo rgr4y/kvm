@@ -502,7 +502,7 @@ export default function MobileDesktop({ isFullscreen }: { isFullscreen?: number 
                         className="animate-slideUpFade pointer-events-none absolute inset-0 flex items-center justify-center"
                       >
                         <div className="relative h-full w-full rounded-md">
-                          <LoadingVideoOverlay show={overlays.showLoadingOverlay} />
+                          <LoadingVideoOverlay show={overlays.showLoadingOverlay} framesReceived={overlays.framesReceived} />
                           <HDMIErrorOverlay show={overlays.showHDMIError} hdmiState={overlays.hdmiState} />
 
                           <NoAutoplayPermissionsOverlay
