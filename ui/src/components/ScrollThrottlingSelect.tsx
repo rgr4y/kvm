@@ -90,7 +90,7 @@ const ScrollThrottlingSelect: React.FC<ScrollThrottlingSelectProps> = ({
     return (
       <div className={`w-full ${dark_bg2_style}`}>
         <div
-          className={`font-microsoft-yahei-ui text-base font-bold mb-2 ${dark_font_style}`}
+          className={`text-base font-bold mb-2 ${dark_font_style}`}
         >
           {title}
         </div>
@@ -153,7 +153,7 @@ const ScrollThrottlingSelect: React.FC<ScrollThrottlingSelectProps> = ({
   return (
     <div style={{paddingLeft:4, paddingRight:4}} className={`w-full h-full ${dark_bg2_style}`}>
       <div
-        className={`font-microsoft-yahei-ui text-xs font-bold leading-[15px] tracking-normal ${dark_font_style}`}
+        className={`text-xs font-bold leading-[15px] tracking-normal ${dark_font_style}`}
       >
         {title}
       </div>

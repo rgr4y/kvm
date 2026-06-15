@@ -72,7 +72,7 @@ export default function DeviceList({
               <div
                 className={`custom-text flex items-center justify-center  
                 rounded cursor-pointer transition-colors
-                text-center font-normal leading-[18px] font-['Microsoft_YaHei_UI'] 
+                text-center font-normal leading-[18px]
                 ${text_primary_color}
                 ${isMobile ? "text-[12px]" : "text-[14px]"}`}
                 onClick={() => setShowAddForm(true)}>
