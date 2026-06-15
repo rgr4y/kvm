@@ -128,11 +128,6 @@ export default function BottomBarPC() {
               text={$at("TailScale")}
               peerState={peerConnectionState}
               vpnState={tailScaleConnectionState}
-              onClick={() => {
-                useUiStore.getState().setSettingsTab("access");
-                setDisableFocusTrap(true);
-                toggleSidebarView("SettingsModal");
-              }}
             />
 
             {showPressedKeys && (
@@ -309,10 +304,9 @@ interface VpnStatusButtonProps {
   text: string;
   peerState: any;
   vpnState: any;
-  onClick?: () => void;
 }
 
-function VpnStatusButton({ text, peerState, vpnState, onClick }: VpnStatusButtonProps) {
+function VpnStatusButton({ text, peerState, vpnState }: VpnStatusButtonProps) {
   const getVpnColor = () => {
     if (peerState === "connected" && vpnState === "connected") {
       return "rgb(22, 152, 217,1)";
@@ -322,8 +316,7 @@ function VpnStatusButton({ text, peerState, vpnState, onClick }: VpnStatusButton
 
   return (
     <div
-      onClick={onClick}
-      className="flex items-center gap-1 cursor-pointer hover:opacity-80"
+      className="flex items-center gap-1"
       style={{ fontSize: 12 }}
     >
       <div style={{
