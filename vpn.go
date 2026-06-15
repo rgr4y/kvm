@@ -898,8 +898,19 @@ func initVPN() {
 		}
 
 		if config.TailScaleAutoStart {
-			if _, err := rpcLoginTailScale(config.TailScaleXEdge); err != nil {
-				vpnLogger.Error().Err(err).Msg("Failed to auto start TailScale")
+			// Retry forever until connected or user disables autostart.
+			// rpcLoginTailScale has a 30s internal timeout per attempt.
+			for attempt := 1; config.TailScaleAutoStart; attempt++ {
+				settings, err := rpcLoginTailScale(config.TailScaleXEdge)
+				if err != nil {
+					vpnLogger.Error().Int("attempt", attempt).Err(err).Msg("TailScale login attempt failed")
+				}
+				if settings.State == "connected" || settings.State == "logined" {
+					vpnLogger.Info().Str("state", settings.State).Str("ip", settings.IP).Msg("TailScale auto-started successfully")
+					break
+				}
+				vpnLogger.Warn().Int("attempt", attempt).Str("state", settings.State).Msg("TailScale not connected, retrying in 10s")
+				time.Sleep(10 * time.Second)
 			}
 		}
 
