@@ -314,10 +314,12 @@ function VpnStatusButton({ text, peerState, vpnState }: VpnStatusButtonProps) {
     return vpnState === "logined" ? "rgba(0, 205, 27, 1)" : "rgba(205, 205, 205, 1)";
   };
 
+  const isActive = vpnState === "logined" || (peerState === "connected" && vpnState === "connected");
+
   return (
     <div
       className="flex items-center gap-1"
-      style={{ fontSize: 12 }}
+      style={{ fontSize: 12, color: isActive ? "rgba(0, 205, 27, 1)" : "inherit" }}
     >
       <div style={{
         width: "7px",
