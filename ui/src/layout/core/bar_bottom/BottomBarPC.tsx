@@ -108,7 +108,7 @@ export default function BottomBarPC() {
       <div className="flex flex-wrap items-stretch justify-between gap-1 h-[24px] ">
         <div className="flex items-center">
           <div className="flex flex-wrap items-center pl-2 gap-x-4">
-            <Text style={{ fontSize: 12 }}>{hostname}:</Text>
+            <Text style={{ fontSize: 12 }} title={hostname}>{__BUILD_HASH__}:</Text>
 
             <ConnectionStatusButton
               icon={hdmiState === "ready" ? <Hdml2SVG fontSize={16} /> : <HdmlSVG fontSize={16} />}

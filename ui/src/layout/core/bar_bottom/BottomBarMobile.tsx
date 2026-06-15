@@ -170,7 +170,7 @@ export default function BottomBarMobile() {
       </div>
 
       <div className={`h-2/7 w-full flex flex-row flex-wrap items-center justify-evenly bg-white ${dark_bg_style_fun(isDark)}`}>
-        <Text style={{ fontSize: 12 }}>{hostname}:</Text>
+        <Text style={{ fontSize: 12 }} title={hostname}>{__BUILD_HASH__}:</Text>
         <ConnectionStatusButton
           icon={peerConnectionState ? <Hdml2SVG /> : <HdmlSVG />}
           text={$at("HDMI")}

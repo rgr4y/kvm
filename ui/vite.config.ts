@@ -4,12 +4,21 @@ import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import svgr from 'vite-plugin-svgr';
+import { execSync } from "child_process";
 declare const process: {
   env: {
     KVM_PROXY_URL: string;
     USE_SSL: string;
   };
 };
+
+const gitHash = (() => {
+  try {
+    return execSync("git rev-parse --short HEAD").toString().trim();
+  } catch {
+    return "unknown";
+  }
+})();
 
 export default defineConfig(({ mode, command }) => {
   const isCloud = mode.indexOf("cloud") !== -1;
@@ -32,6 +41,9 @@ export default defineConfig(({ mode, command }) => {
   }
 
   return {
+    define: {
+      __BUILD_HASH__: JSON.stringify(gitHash),
+    },
     plugins,
     build: {
       outDir: isCloud ? "dist" : "../static",
