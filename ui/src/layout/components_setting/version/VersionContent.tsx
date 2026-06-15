@@ -227,6 +227,8 @@ export default function SettingsVersion() {
                   {$at("AppVersion")}: {currentVersions.appVersion}
                   <br />
                   {$at("SystemVersion")}: {currentVersions.systemVersion}
+                  <br />
+                  <span className="text-xs text-slate-400">{$at("Build")}: {__BUILD_HASH__}</span>
                 </>
               ) : (
                 <>

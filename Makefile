@@ -1,8 +1,8 @@
 # ──────────────────────────────────────────────
 # Version
 # ──────────────────────────────────────────────
-VERSION     ?= 0.1.3
-VERSION_DEV ?= $(VERSION)-dev
+VERSION     ?= 0.2.0
+VERSION_DEV ?= $(VERSION)-$(shell git rev-parse --short HEAD)
 
 # ──────────────────────────────────────────────
 # Device (override any of these on the command line)
@@ -86,10 +86,12 @@ deploy: build_dev
 		echo "Override with: make deploy DEVICE_HOST=<host>"; \
 		exit 1; \
 	fi
+	@echo "Stopping kvm_app on device..."
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; sleep 1'
 	@echo "Deploying to $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)..."
 	scp $(BIN_DIR)/kvm_app $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)
-	@echo "Restarting kvm_app on device..."
-	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; nohup $(DEVICE_PATH) > /dev/null 2>&1 &'
+	@echo "Starting kvm_app on device..."
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'nohup $(DEVICE_PATH) > /dev/null 2>&1 &'
 	@echo "Deploy complete."
 
 # Deploy without rebuild
@@ -99,10 +101,12 @@ deploy_only:
 		echo "Override with: make deploy_only DEVICE_HOST=<host>"; \
 		exit 1; \
 	fi
+	@echo "Stopping kvm_app on device..."
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; sleep 1'
 	@echo "Deploying to $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)..."
 	scp $(BIN_DIR)/kvm_app $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)
-	@echo "Restarting kvm_app on device..."
-	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; nohup $(DEVICE_PATH) > /dev/null 2>&1 &'
+	@echo "Starting kvm_app on device..."
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'nohup $(DEVICE_PATH) > /dev/null 2>&1 &'
 	@echo "Deploy complete."
 
 # Backup device state to local directory
