@@ -43,7 +43,19 @@ func initUsbGadget() {
 
 	gadget.SetOnKeyboardStateChange(func(state usbgadget.KeyboardState) {
 		if currentSession != nil {
-			writeJSONRPCEvent("keyboardLedState", state, currentSession)
+			currentSession.reportHidRPCKeyboardLedState(state)
+		}
+	})
+
+	gadget.SetOnKeysDownChange(func(state usbgadget.KeysDownState) {
+		if currentSession != nil {
+			currentSession.enqueueKeysDownState(state)
+		}
+	})
+
+	gadget.SetOnKeepAliveReset(func() {
+		if currentSession != nil {
+			currentSession.resetKeepAliveTime()
 		}
 	})
 
@@ -113,10 +125,6 @@ func rpcKeyboardReport(modifier uint8, keys []uint8) error {
 
 func rpcKeypressReport(key uint8, press bool) error {
 	return gadget.KeypressReport(key, press)
-}
-
-func rpcKeypressKeepAlive() error {
-	return gadget.KeypressKeepAlive()
 }
 
 func rpcAbsMouseReport(x, y int, buttons uint8) error {
@@ -216,7 +224,17 @@ func rpcReinitializeUsbGadget() error {
 	// Reapply callbacks
 	gadget.SetOnKeyboardStateChange(func(state usbgadget.KeyboardState) {
 		if currentSession != nil {
-			writeJSONRPCEvent("keyboardLedState", state, currentSession)
+			currentSession.reportHidRPCKeyboardLedState(state)
+		}
+	})
+	gadget.SetOnKeysDownChange(func(state usbgadget.KeysDownState) {
+		if currentSession != nil {
+			currentSession.enqueueKeysDownState(state)
+		}
+	})
+	gadget.SetOnKeepAliveReset(func() {
+		if currentSession != nil {
+			currentSession.resetKeepAliveTime()
 		}
 	})
 	gadget.SetOnHidDeviceMissing(func(device string, err error) {
