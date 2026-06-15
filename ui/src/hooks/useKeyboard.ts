@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import notifications from "@/notifications";
-import { useHidStore, useRTCStore, useSettingsStore } from "@/hooks/stores";
+import { hidKeyBufferSize, useHidStore, useRTCStore, useSettingsStore } from "@/hooks/stores";
 import { useJsonRpc } from "@/hooks/useJsonRpc";
+import { useHidRpc } from "@/hooks/useHidRpc";
+import {
+  KeyboardLedStateMessage,
+  KeyboardMacroStateMessage,
+  KeyboardMacroStep,
+  KeysDownStateMessage,
+} from "@/hooks/hidRpc";
 import { keys, modifiers } from "@/keyboardMappings";
+
+const MACRO_RESET_KEYBOARD_STATE: KeyboardMacroStep = {
+  keys: new Array(hidKeyBufferSize).fill(0),
+  modifier: 0,
+  delay: 0,
+};
 
 export default function useKeyboard() {
   const [send] = useJsonRpc();
@@ -15,51 +28,67 @@ export default function useKeyboard() {
   );
   const isReinitializingGadget = useHidStore(state => state.isReinitializingGadget);
   const usbState = useHidStore(state => state.usbState);
+  const setKeysDownState = useHidStore(state => state.setKeysDownState);
+  const setKeyboardLedState = useHidStore(state => state.setKeyboardLedState);
+  const setPasteModeEnabled = useHidStore(state => state.setPasteModeEnabled);
+
+  // HID RPC binary channel — handles incoming state messages from device
+  const {
+    reportKeyboardEvent: sendKeyboardEventHidRpc,
+    reportKeyboardMacroEvent: sendKeyboardMacroEventHidRpc,
+    rpcHidReady,
+  } = useHidRpc(message => {
+    switch (message.constructor) {
+      case KeysDownStateMessage:
+        setKeysDownState((message as KeysDownStateMessage).keysDownState);
+        break;
+      case KeyboardLedStateMessage:
+        setKeyboardLedState((message as KeyboardLedStateMessage).keyboardLedState);
+        break;
+      case KeyboardMacroStateMessage:
+        if (!(message as KeyboardMacroStateMessage).isPaste) break;
+        setPasteModeEnabled((message as KeyboardMacroStateMessage).state);
+        break;
+      default:
+        break;
+    }
+  });
 
   // Track held keys for keepalive
   const heldKeysRef = useRef<Set<number>>(new Set());
   const keepaliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const sendKeyboardEvent = useCallback(
-    (keys: number[], modifiers: number[]) => {
-      if (!forceHttp && rpcDataChannel?.readyState !== "open") return;
+    (keyArray: number[], modifierArray: number[]) => {
       // Don't send keyboard events while reinitializing gadget
       if (isReinitializingGadget) return;
       if (usbState !== "configured") return;
-      const accModifier = modifiers.reduce((acc, val) => acc + val, 0);
 
-      // Fallback to JSON-RPC
-      send("keyboardReport", { keys, modifier: accModifier }, resp => {
-        if ("error" in resp) {
-          const msg = (resp.error.data as string) || resp.error.message || "";
-          if (msg.includes("cannot send after transport endpoint shutdown") && usbState === "configured") {
-            notifications.error("Please check if the cable and connection are stable.", { duration: 5000 });
+      const accModifier = modifierArray.reduce((acc, val) => acc + val, 0);
+
+      if (rpcHidReady) {
+        // Binary channel — send keyboard report directly
+        sendKeyboardEventHidRpc(keyArray, accModifier);
+      } else {
+        // JSON-RPC fallback
+        if (!forceHttp && rpcDataChannel?.readyState !== "open") return;
+        send("keyboardReport", { keys: keyArray, modifier: accModifier }, resp => {
+          if ("error" in resp) {
+            const msg = (resp.error.data as string) || resp.error.message || "";
+            if (msg.includes("cannot send after transport endpoint shutdown") && usbState === "configured") {
+              notifications.error("Please check if the cable and connection are stable.", { duration: 5000 });
+            }
           }
-        }
-      });
+        });
+      }
 
-      // We do this for the info bar to display the currently pressed keys for the user
-      updateActiveKeysAndModifiers({ keys: keys, modifiers: modifiers });
+      // Update the info bar display of currently pressed keys
+      updateActiveKeysAndModifiers({ keys: keyArray, modifiers: modifierArray });
     },
-    [forceHttp, rpcDataChannel?.readyState, send, updateActiveKeysAndModifiers, isReinitializingGadget, usbState],
-  );
-
-  // Send per-key press/release
-  const sendKeypress = useCallback(
-    (key: number, press: boolean) => {
-      if (isReinitializingGadget || usbState !== "configured") return;
-
-      // Legacy: simulate device-side key handling
-      // This maintains the 6-key buffer on the frontend for legacy compatibility
-      // For simplicity in migration, we fall back to full state reports
-      const modifier = press ? 0 : 0; // Simplified - would need proper modifier tracking
-      sendKeyboardEvent(press ? [key] : [], [modifier]);
-    },
-    [isReinitializingGadget, usbState, sendKeyboardEvent]
+    [forceHttp, rpcDataChannel?.readyState, send, updateActiveKeysAndModifiers, isReinitializingGadget, usbState, rpcHidReady, sendKeyboardEventHidRpc],
   );
 
   const resetKeyboardState = useCallback(() => {
-    // Release all held keys
     sendKeyboardEvent([], []);
     heldKeysRef.current.clear();
     if (keepaliveIntervalRef.current) {
@@ -75,28 +104,47 @@ export default function useKeyboard() {
     };
   }, [resetKeyboardState]);
 
-  const executeMacro = async (steps: { keys: string[] | null; modifiers: string[] | null; delay: number }[]) => {
-    for (const [index, step] of steps.entries()) {
-      const keyValues = step.keys?.map(key => keys[key]).filter(Boolean) || [];
-      const modifierValues = step.modifiers?.map(mod => modifiers[mod]).filter(Boolean) || [];
+  const executeMacro = useCallback(
+    async (steps: { keys: string[] | null; modifiers: string[] | null; delay: number }[]) => {
+      if (rpcHidReady) {
+        // Build macro steps and send via HID RPC in one shot
+        const macroSteps: KeyboardMacroStep[] = [];
 
-      // If the step has keys and/or modifiers, press them and hold for the delay
-      if (keyValues.length > 0 || modifierValues.length > 0) {
-        sendKeyboardEvent(keyValues, modifierValues);
-        await new Promise(resolve => setTimeout(resolve, step.delay || 50));
+        for (const step of steps) {
+          const keyValues = (step.keys || []).map(key => keys[key]).filter(Boolean);
+          const modifierMask: number = (step.modifiers || [])
+            .map(mod => modifiers[mod])
+            .reduce((acc, val) => acc + val, 0);
 
-        resetKeyboardState();
+          if (keyValues.length > 0 || modifierMask > 0) {
+            macroSteps.push({ keys: keyValues, modifier: modifierMask, delay: 20 });
+            macroSteps.push({ ...MACRO_RESET_KEYBOARD_STATE, delay: step.delay || 100 });
+          }
+        }
+
+        sendKeyboardMacroEventHidRpc(macroSteps);
       } else {
-        // This is a delay-only step, just wait for the delay amount
-        await new Promise(resolve => setTimeout(resolve, step.delay || 50));
-      }
+        // Legacy: execute step by step via JSON-RPC
+        for (const [index, step] of steps.entries()) {
+          const keyValues = step.keys?.map(key => keys[key]).filter(Boolean) || [];
+          const modifierValues = step.modifiers?.map(mod => modifiers[mod]).filter(Boolean) || [];
 
-      // Add a small pause between steps if not the last step
-      if (index < steps.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-    }
-  };
+          if (keyValues.length > 0 || modifierValues.length > 0) {
+            sendKeyboardEvent(keyValues, modifierValues);
+            await new Promise(resolve => setTimeout(resolve, step.delay || 50));
+            resetKeyboardState();
+          } else {
+            await new Promise(resolve => setTimeout(resolve, step.delay || 50));
+          }
 
-  return { sendKeyboardEvent, sendKeypress, resetKeyboardState, executeMacro };
+          if (index < steps.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+      }
+    },
+    [rpcHidReady, sendKeyboardMacroEventHidRpc, sendKeyboardEvent, resetKeyboardState],
+  );
+
+  return { sendKeyboardEvent, resetKeyboardState, executeMacro };
 }
