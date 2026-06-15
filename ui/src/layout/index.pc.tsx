@@ -47,6 +47,7 @@ import { DeviceStatus } from "@routes/login_page/index";
 import { LocalVersionInfo } from "@/layout/components_setting/version/VersionContent";
 import Desktop from "@/layout/core/desktop/index";
 import {  dark_bg_style_fun } from "@/layout/theme_color";
+import { doRpcHidHandshake } from "@/hooks/useHidRpc";
 import SidebarContainer from "@/layout/core/bar_side";
 import { useTheme } from "@/layout/contexts/ThemeContext";
 
@@ -118,6 +119,10 @@ export default function PCHome() {
   const setPeerConnection = useRTCStore(state => state.setPeerConnection);
   const setDiskChannel = useRTCStore(state => state.setDiskChannel);
   const setRpcDataChannel = useRTCStore(state => state.setRpcDataChannel);
+  const setRpcHidChannel = useRTCStore(state => state.setRpcHidChannel);
+  const setRpcHidUnreliableChannel = useRTCStore(state => state.setRpcHidUnreliableChannel);
+  const setRpcHidUnreliableNonOrderedChannel = useRTCStore(state => state.setRpcHidUnreliableNonOrderedChannel);
+  const setRpcHidProtocolVersion = useRTCStore(state => state.setRpcHidProtocolVersion);
   const setTransceiver = useRTCStore(state => state.setTransceiver);
   const setAudioTransceiver = useRTCStore(state => state.setAudioTransceiver);
   const location = useLocation();
@@ -462,6 +467,29 @@ export default function PCHome() {
       setDiskChannel(diskDataChannel);
     };
 
+    // HID RPC binary data channels
+    const hidRpcChannel = pc.createDataChannel("hidrpc");
+    hidRpcChannel.onopen = () => {
+      setRpcHidChannel(hidRpcChannel);
+    };
+    doRpcHidHandshake(hidRpcChannel, setRpcHidProtocolVersion);
+
+    const hidRpcUnreliableChannel = pc.createDataChannel("hidrpc-unreliable-ordered", {
+      ordered: true,
+      maxRetransmits: 0,
+    });
+    hidRpcUnreliableChannel.onopen = () => {
+      setRpcHidUnreliableChannel(hidRpcUnreliableChannel);
+    };
+
+    const hidRpcUnreliableNonOrderedChannel = pc.createDataChannel("hidrpc-unreliable-nonordered", {
+      ordered: false,
+      maxRetransmits: 0,
+    });
+    hidRpcUnreliableNonOrderedChannel.onopen = () => {
+      setRpcHidUnreliableNonOrderedChannel(hidRpcUnreliableNonOrderedChannel);
+    };
+
     setPeerConnection(pc);
   }, [
     forceHttp,
@@ -475,6 +503,10 @@ export default function PCHome() {
     setRpcDataChannel,
     setTransceiver,
     setAudioTransceiver,
+    setRpcHidChannel,
+    setRpcHidUnreliableChannel,
+    setRpcHidUnreliableNonOrderedChannel,
+    setRpcHidProtocolVersion,
   ]);
 
   useEffect(() => {
