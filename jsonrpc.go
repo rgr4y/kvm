@@ -199,7 +199,7 @@ func rpcReboot(force bool) error {
 	return nil
 }
 
-var streamFactor = 1.0
+var streamFactor = 0.5
 
 func rpcGetStreamQualityFactor() (float64, error) {
 	return streamFactor, nil
@@ -213,6 +213,10 @@ func rpcSetStreamQualityFactor(factor float64) error {
 	}
 
 	streamFactor = factor
+	config.StreamQualityFactor = factor
+	if saveErr := SaveConfig(); saveErr != nil {
+		logger.Warn().Err(saveErr).Msg("failed to persist stream quality factor")
+	}
 	return nil
 }
 

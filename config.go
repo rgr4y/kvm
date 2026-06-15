@@ -141,6 +141,7 @@ type Config struct {
 	Firewall                    *FirewallConfig        `json:"firewall"`
 	APIKey                      string                 `json:"api_key"`
 	PersistedVirtualMediaState  *VirtualMediaState     `json:"persisted_virtual_media_state,omitempty"`
+	StreamQualityFactor         float64                `json:"stream_quality_factor"`
 }
 
 type FirewallConfig struct {

@@ -18,6 +18,11 @@ func Main() {
 	SyncConfigSD(true)
 	LoadConfig()
 
+	// Restore persisted stream quality (default 0.5 = Medium)
+	if config.StreamQualityFactor > 0 {
+		streamFactor = config.StreamQualityFactor
+	}
+
 	if config.APIKey == "" {
 		key, err := generateAPIKey()
 		if err != nil {
