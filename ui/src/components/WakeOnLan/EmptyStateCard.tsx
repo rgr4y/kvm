@@ -19,8 +19,8 @@ export default function EmptyStateCard({
         }}
       >
         <div id="addDeviceBtn" onClick={() => setShowAddForm(true)}
-                className="w-full max-w-xs mx-auto bg-white border-2 border-dashed border-blue-300 rounded-xl py-4 px-6 text-blue-500 font-medium hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-opacity-50">
-          <i className="fas fa-plus mr-2"><LuPlus/></i>{$at("Add a device to start using Wake-on-LAN")}
+                className="w-full max-w-xs mx-auto border-2 border-dashed border-blue-300/30 rounded-xl py-4 px-6 text-blue-400 font-medium hover:bg-blue-500/10 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-opacity-50 cursor-pointer">
+          <span className="inline-flex items-center gap-2"><LuPlus />{$at("Add a device to start using Wake-on-LAN")}</span>
         </div>
 
       </div>
