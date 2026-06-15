@@ -20,6 +20,16 @@ import { dark_bg2_style} from "@/layout/theme_color";
 
 import GoBottomSvg from "@/assets/second/gobottom.svg?react";
 
+// Reverse map: HID code → keyboard code name for virtual keyboard highlighting
+const hidCodeToName: Record<number, string> = {};
+for (const [name, code] of Object.entries(keys)) {
+  if (code) hidCodeToName[code] = name;
+}
+const hidModToName: Record<number, string> = {};
+for (const [name, code] of Object.entries(modifiers)) {
+  if (code) hidModToName[code] = name;
+}
+
 export const DetachIcon = ({ className }: { className?: string }) => {
   return <img src={DetachIconRaw} alt="Detach Icon" className={className} />;
 };
@@ -87,6 +97,20 @@ function KeyboardWrapper() {
     [stickyModifiers],
   );
   const isCapsLockActive = useHidStore(useShallow(state => state.keyboardLedState?.caps_lock));
+
+  // Track physically pressed keys for visual flash on virtual keyboard
+  const activeKeys = useHidStore(state => state.activeKeys);
+  const activeModifiers = useHidStore(state => state.activeModifiers);
+  const physicallyPressedButtons = useMemo(() => {
+    const names: string[] = [];
+    for (const code of activeKeys) {
+      if (hidCodeToName[code]) names.push(hidCodeToName[code]);
+    }
+    for (const code of activeModifiers) {
+      if (hidModToName[code]) names.push(hidModToName[code]);
+    }
+    return names.join(" ");
+  }, [activeKeys, activeModifiers]);
 
   // HID related states
   const keyboardLedStateSyncAvailable = useHidStore(state => state.keyboardLedStateSyncAvailable);
@@ -806,6 +830,14 @@ function KeyboardWrapper() {
                           .hg-button {
                             transition: background-color 0.05s ease-in-out;
                           }
+                          .hg-button.hg-physically-pressed {
+                            background-color: rgba(22,152,217,0.4) !important;
+                            border-color: rgba(22,152,217,0.8) !important;
+                          }
+                          html.dark .hg-button.hg-physically-pressed {
+                            background-color: rgba(22,152,217,0.6) !important;
+                            border-color: rgba(22,152,217,0.9) !important;
+                          }
                         `}
                       </style>
                         <div style={{ width: "40%" }} className={"flex items-start justify-center flex-col"}>
@@ -814,11 +846,14 @@ function KeyboardWrapper() {
                             baseClass="simple-keyboard-main"
                             layoutName={layoutName}
                             onKeyPress={onKeyDown}
-                            buttonTheme={
-                              modifierLockMode && modifierLockButtons
+                            buttonTheme={[
+                              ...(modifierLockMode && modifierLockButtons
                                 ? [{ class: "modifier-locked", buttons: modifierLockButtons }]
-                                : []
-                            }
+                                : []),
+                              ...(physicallyPressedButtons
+                                ? [{ class: "hg-physically-pressed", buttons: physicallyPressedButtons }]
+                                : []),
+                            ]}
                             display={keyDisplayMap}
                             layout={{
                               default: [
@@ -843,11 +878,14 @@ function KeyboardWrapper() {
                             layoutName={layoutName}
                             onKeyPress={onKeyDown}
                             display={keyDisplayMap}
-                            buttonTheme={
-                              modifierLockMode && modifierLockButtons
+                            buttonTheme={[
+                              ...(modifierLockMode && modifierLockButtons
                                 ? [{ class: "modifier-locked", buttons: modifierLockButtons }]
-                                : []
-                            }
+                                : []),
+                              ...(physicallyPressedButtons
+                                ? [{ class: "hg-physically-pressed", buttons: physicallyPressedButtons }]
+                                : []),
+                            ]}
                             layout={virtualKeyboardLayout.main}
                             disableButtonHold={true}
                             syncInstanceInputs={true}
