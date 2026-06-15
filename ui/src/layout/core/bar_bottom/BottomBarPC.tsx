@@ -128,12 +128,11 @@ export default function BottomBarPC() {
               text={$at("TailScale")}
               peerState={peerConnectionState}
               vpnState={tailScaleConnectionState}
-            />
-
-            <VpnStatusButton
-              text={$at("Zerotier")}
-              peerState={peerConnectionState}
-              vpnState={zeroTierConnectionState}
+              onClick={() => {
+                useUiStore.getState().setSettingsTab("access");
+                setDisableFocusTrap(true);
+                toggleSidebarView("SettingsModal");
+              }}
             />
 
             {showPressedKeys && (
@@ -293,20 +292,16 @@ interface ConnectionStatusButtonProps {
 
 function ConnectionStatusButton({ icon, text, isActive }: ConnectionStatusButtonProps) {
   return (
-    <AntdButton
-      icon={icon}
-      type="text"
-      size="small"
+    <div
+      className="flex items-center gap-1"
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         color: isActive ? "rgba(0, 205, 27, 1)" : "inherit",
         fontSize: 12,
       }}
     >
+      {icon}
       {text}
-    </AntdButton>
+    </div>
   );
 }
 
@@ -314,9 +309,10 @@ interface VpnStatusButtonProps {
   text: string;
   peerState: any;
   vpnState: any;
+  onClick?: () => void;
 }
 
-function VpnStatusButton({ text, peerState, vpnState }: VpnStatusButtonProps) {
+function VpnStatusButton({ text, peerState, vpnState, onClick }: VpnStatusButtonProps) {
   const getVpnColor = () => {
     if (peerState === "connected" && vpnState === "connected") {
       return "rgb(22, 152, 217,1)";
@@ -325,27 +321,19 @@ function VpnStatusButton({ text, peerState, vpnState }: VpnStatusButtonProps) {
   };
 
   return (
-    <AntdButton
-      icon={
-        <div style={{
-          width: "7px",
-          height: "7px",
-          borderRadius: "50%",
-          backgroundColor: getVpnColor(),
-        }}></div>
-      }
-      type="text"
-      size="small"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 12,
-        color: "inherit",
-      }}
+    <div
+      onClick={onClick}
+      className="flex items-center gap-1 cursor-pointer hover:opacity-80"
+      style={{ fontSize: 12 }}
     >
+      <div style={{
+        width: "7px",
+        height: "7px",
+        borderRadius: "50%",
+        backgroundColor: getVpnColor(),
+      }} />
       {text}
-    </AntdButton>
+    </div>
   );
 }
 

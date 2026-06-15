@@ -76,6 +76,9 @@ interface UIState {
   isAttachedVirtualKeyboardVisible: boolean;
   setAttachedVirtualKeyboardVisibility: (enabled: boolean) => void;
 
+  settingsTab: string | null;
+  setSettingsTab: (tab: string | null) => void;
+
   terminalType: AvailableTerminalTypes;
   setTerminalType: (enabled: UIState["terminalType"]) => void;
   otherSession:boolean;
@@ -118,6 +121,9 @@ export const useUiStore = create<UIState>(set => ({
         return { topBarView: view ,sidebarView: null };
       }
     }),
+    settingsTab: null,
+    setSettingsTab: tab => set({ settingsTab: tab }),
+
     otherSession:false,
     setOtherSession: enabled => set({ otherSession: enabled }),
 

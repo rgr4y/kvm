@@ -18,6 +18,7 @@ import SettingsHardware from "@/layout/components_setting/hardware/HardwareConte
 import SettingsAdvanced from "@/layout/components_setting/advanced/AdvancedContent";
 import SettingsVersion from "@/layout/components_setting/version/VersionContent";
 import { dark_bd_style, dark_bg2_style } from "@/layout/theme_color";
+import { useUiStore } from "@/hooks/stores";
 
 interface MenuItem {
   key: string;
@@ -31,7 +32,16 @@ interface SettingsDialogProps {
 }
 
 const SettingsModalPC: React.FC<SettingsDialogProps> = ({ visible = true }) => {
-  const [selectedMenu, setSelectedMenu] = useState<string>("general");
+  const settingsTab = useUiStore(state => state.settingsTab);
+  const setSettingsTab = useUiStore(state => state.setSettingsTab);
+  const [selectedMenu, setSelectedMenu] = useState<string>(settingsTab || "general");
+
+  React.useEffect(() => {
+    if (settingsTab) {
+      setSelectedMenu(settingsTab);
+      setSettingsTab(null);
+    }
+  }, [settingsTab, setSettingsTab]);
   const { $at } = useReactAt();
   const menuItems: MenuItem[] = [
     { key: "general", label: "General", icon: <SettingOutlined /> },
