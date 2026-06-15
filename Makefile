@@ -8,7 +8,7 @@ VERSION_DEV ?= $(VERSION)-$(shell git rev-parse --short HEAD)
 # Device (override any of these on the command line)
 # ──────────────────────────────────────────────
 DEVICE_USER  ?= root
-DEVICE_HOSTS ?= picokvm 10.0.1.8
+DEVICE_HOSTS ?= picokvm 10.0.1.8 192.168.4.8
 DEVICE_HOST  ?= $(shell for h in $(DEVICE_HOSTS); do \
   ssh -o ConnectTimeout=2 -o BatchMode=yes $(DEVICE_USER)@$$h true 2>/dev/null && echo $$h && break; \
 done)
