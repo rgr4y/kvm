@@ -195,8 +195,8 @@ func (t *TimeSync) Start() {
 }
 
 func (t *TimeSync) setSystemTime(now time.Time) error {
-	nowStr := now.Format("2006-01-02 15:04:05")
-	output, err := exec.Command("date", "-s", nowStr).CombinedOutput()
+	nowStr := now.UTC().Format("2006-01-02 15:04:05")
+	output, err := exec.Command("date", "-u", "-s", nowStr).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to run date -s: %w, %s", err, string(output))
 	}

@@ -11,6 +11,7 @@ import (
 )
 
 func TimetoRtcTime(t time.Time) unix.RTCTime {
+	t = t.UTC()
 	return unix.RTCTime{
 		Sec:   int32(t.Second()),
 		Min:   int32(t.Minute()),
