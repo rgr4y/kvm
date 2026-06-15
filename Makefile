@@ -1,21 +1,37 @@
+# ──────────────────────────────────────────────
+# Version
+# ──────────────────────────────────────────────
+VERSION     ?= 0.1.3
+VERSION_DEV ?= $(VERSION)-dev
+
+# ──────────────────────────────────────────────
+# Device (override any of these on the command line)
+# ──────────────────────────────────────────────
+DEVICE_USER  ?= root
+DEVICE_HOSTS ?= picokvm 10.0.1.8
+DEVICE_HOST  ?= $(shell for h in $(DEVICE_HOSTS); do \
+  ssh -o ConnectTimeout=2 -o BatchMode=yes $(DEVICE_USER)@$$h true 2>/dev/null && echo $$h && break; \
+done)
+DEVICE_PATH  := /userdata/picokvm/bin/kvm_app
+
+# ──────────────────────────────────────────────
+# OTA signing (leave empty to skip)
+# ──────────────────────────────────────────────
+OTA_SIGNING_KEY ?=
+OTA_PUBLIC_KEY  ?=
+
+# ──────────────────────────────────────────────
+# Build internals
+# ──────────────────────────────────────────────
 BRANCH    ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILDDATE ?= $(shell date -u +%FT%T%z)
 BUILDTS   ?= $(shell date -u +%s)
 REVISION  ?= $(shell git rev-parse HEAD)
-VERSION_DEV ?= 0.1.3-dev
-VERSION ?= 0.1.3
 
 PROMETHEUS_TAG := github.com/prometheus/common/version
-KVM_PKG_NAME := kvm
+KVM_PKG_NAME   := kvm
 
-# OTA signing key path (Ed25519 private key for auto-signing at build time)
-OTA_SIGNING_KEY ?=
-
-# OTA signing public key (hex-encoded Ed25519 public key, 64 hex chars)
-# Default empty = signature verification disabled (backward compatible)
-OTA_PUBLIC_KEY ?=
-
-GO_BUILD_ARGS := -tags netgo
+GO_BUILD_ARGS         := -tags netgo
 GO_RELEASE_BUILD_ARGS := -trimpath $(GO_BUILD_ARGS)
 GO_LDFLAGS := \
   -s -w \
@@ -25,7 +41,7 @@ GO_LDFLAGS := \
   -X $(KVM_PKG_NAME).builtTimestamp=$(BUILDTS) \
   -X $(KVM_PKG_NAME).builtOtaPublicKey=$(OTA_PUBLIC_KEY)
 
-GO_CMD := GOOS=linux GOARCH=arm GOARM=7 go
+GO_CMD  := GOOS=linux GOARCH=arm GOARM=7 go
 BIN_DIR := $(shell pwd)/bin
 
 TEST_DIRS := $(shell find . -name "*_test.go" -type f -exec dirname {} \; | sort -u)
@@ -62,3 +78,43 @@ build_release: frontend
 sign:
 	@echo "Signing firmware files..."
 	go run cmd/main.go cli signer sign --key $(KEY) $(FILES)
+
+# Deploy binary to device over SSH
+deploy: build_dev
+	@if [ -z "$(DEVICE_HOST)" ]; then \
+		echo "Error: no reachable device. Tried: $(DEVICE_HOSTS)"; \
+		echo "Override with: make deploy DEVICE_HOST=<host>"; \
+		exit 1; \
+	fi
+	@echo "Deploying to $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)..."
+	scp $(BIN_DIR)/kvm_app $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)
+	@echo "Restarting kvm_app on device..."
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; nohup $(DEVICE_PATH) > /dev/null 2>&1 &'
+	@echo "Deploy complete."
+
+# Deploy without rebuild
+deploy_only:
+	@if [ -z "$(DEVICE_HOST)" ]; then \
+		echo "Error: no reachable device. Tried: $(DEVICE_HOSTS)"; \
+		echo "Override with: make deploy_only DEVICE_HOST=<host>"; \
+		exit 1; \
+	fi
+	@echo "Deploying to $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)..."
+	scp $(BIN_DIR)/kvm_app $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)
+	@echo "Restarting kvm_app on device..."
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; nohup $(DEVICE_PATH) > /dev/null 2>&1 &'
+	@echo "Deploy complete."
+
+# Backup device state to local directory
+backup:
+	@if [ -z "$(DEVICE_HOST)" ]; then \
+		echo "Error: no reachable device. Tried: $(DEVICE_HOSTS)"; \
+		exit 1; \
+	fi
+	@echo "Backing up from $(DEVICE_HOST)..."
+	@mkdir -p ../kvm.backup
+	scp -r $(DEVICE_USER)@$(DEVICE_HOST):/userdata/picokvm/bin/ ../kvm.backup/bin/
+	scp -r $(DEVICE_USER)@$(DEVICE_HOST):/userdata/picokvm/model/ ../kvm.backup/model/
+	scp -r $(DEVICE_USER)@$(DEVICE_HOST):/userdata/picokvm/tls/ ../kvm.backup/tls/
+	scp $(DEVICE_USER)@$(DEVICE_HOST):/userdata/kvm_config.json ../kvm.backup/
+	@echo "Backup complete → ../kvm.backup/"
