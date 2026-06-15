@@ -233,6 +233,9 @@ export default function ConnectionStatsSidebar() {
                         )}
                         domain={[0, 80]}
                         unit=" fps"
+                        yTicks={[0, 20, 40, 60, 80]}
+                        highlightTick={60}
+                        referenceValue={60}
                       />
                     )}
                   </div>

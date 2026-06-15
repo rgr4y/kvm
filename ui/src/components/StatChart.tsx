@@ -19,11 +19,15 @@ export default function StatChart({
                                     domain,
                                     unit,
                                     referenceValue,
+                                    yTicks,
+                                    highlightTick,
                                   }: {
   data: { date: number; stat: number | null | undefined }[];
   domain?: [string | number, string | number];
   unit?: string;
   referenceValue?: number;
+  yTicks?: number[];
+  highlightTick?: number;
 }) {
   const { isDark } = useThemeSettings();
   return (
@@ -71,14 +75,26 @@ export default function StatChart({
             dataKey="stat"
             axisLine={false}
             orientation="left"
-            tick={{
-              fontFamily: "Circular",
-              fontSize: "12px",
-              fill: "rgba(107, 114, 128, 1)",
-            }}
+            tick={({ x, y, payload }: any) => (
+              <text
+                x={x}
+                y={y}
+                textAnchor="end"
+                dominantBaseline="middle"
+                style={{
+                  fontFamily: "Circular",
+                  fontSize: "12px",
+                  fill: payload.value === highlightTick ? "#fff" : "rgba(107, 114, 128, 1)",
+                  fontWeight: payload.value === highlightTick ? 700 : 400,
+                }}
+              >
+                {payload.value}
+              </text>
+            )}
             padding={{ top: 0, bottom: 0 }}
             tickLine={false}
             domain={domain || ["auto", "auto"]}
+            ticks={yTicks}
           />
 
           <Tooltip
