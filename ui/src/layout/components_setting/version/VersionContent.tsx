@@ -333,17 +333,22 @@ function UpdateSourceSettings({
         />
       </SettingsItem>
       {updateSource === "custom" && (
-        <div className="flex items-end gap-x-2">
-          <InputFieldWithLabel
-            size="SM"
-            label="Custom Base URL"
-            value={customUpdateBaseURL}
-            onChange={e => onCustomUpdateBaseURLChange(e.target.value)}
-            placeholder="temp_url:picokvm.top/luckfox_picokvm_firmware/lastest/"
-          />
-          <AntdButton type="primary" onClick={onSaveCustomUpdateBaseURL}>
-            {$at("Apply")}
-          </AntdButton>
+        <div className="space-y-1">
+          <div className="flex items-end gap-x-2">
+            <InputFieldWithLabel
+              size="SM"
+              label="Custom Base URL"
+              value={customUpdateBaseURL}
+              onChange={e => onCustomUpdateBaseURLChange(e.target.value)}
+              placeholder="https://example.com/firmware/latest/"
+            />
+            <AntdButton type="primary" onClick={onSaveCustomUpdateBaseURL}>
+              {$at("Apply")}
+            </AntdButton>
+          </div>
+          <p className="text-xs text-slate-400">
+            URL must serve: version.txt, kvm_app, kvm_app.sha256, and update_system.zip (.sha256)
+          </p>
         </div>
       )}
     </div>
