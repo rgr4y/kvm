@@ -7,7 +7,7 @@ const VpnConnectionStatusMap = {
   connecting: "Connecting",
   disconnected: "Disconnected",
   closed: "Closed",
-  logined: "Logined",
+  logined: "Logged in",
 };
 
 export type VpnConnections = keyof typeof VpnConnectionStatusMap;

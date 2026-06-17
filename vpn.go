@@ -258,7 +258,7 @@ func HandleVpnDisplayUpdateMessage(event CtrlResponse) {
 	case "connected":
 		updateLabelIfChanged("Network_TailScale_Label", "Connected")
 	case "logined":
-		updateLabelIfChanged("Network_TailScale_Label", "Logined")
+		updateLabelIfChanged("Network_TailScale_Label", "Logged in")
 	default:
 		updateLabelIfChanged("Network_TailScale_Label", "Disconnected")
 	}
@@ -267,7 +267,7 @@ func HandleVpnDisplayUpdateMessage(event CtrlResponse) {
 	case "connected":
 		updateLabelIfChanged("Network_ZeroTier_Label", "Connected")
 	case "logined":
-		updateLabelIfChanged("Network_ZeroTier_Label", "Logined")
+		updateLabelIfChanged("Network_ZeroTier_Label", "Logged in")
 	default:
 		updateLabelIfChanged("Network_ZeroTier_Label", "Disconnected")
 	}
