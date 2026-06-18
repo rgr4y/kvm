@@ -10,3 +10,4 @@ ui/.i18n_extractor.json
 
 device-tests.tar.gz
 .worktrees/
+log
