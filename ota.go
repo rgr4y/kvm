@@ -458,7 +458,145 @@ func fetchKvmSystemLatestRelease(ctx context.Context) (tag string, zipURL string
 	return "", "", "", lastErr
 }
 
+// parseGitHubRepoURL checks if a URL is a GitHub repo (github.com/owner/repo)
+// and returns the API URL for latest release. Returns empty string if not GitHub.
+func parseGitHubRepoURL(rawURL string) (apiURL string, ok bool) {
+	u, err := url.Parse(normalizeBaseURL(rawURL))
+	if err != nil {
+		return "", false
+	}
+	if u.Host != "github.com" && u.Host != "www.github.com" {
+		return "", false
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 2 {
+		return "", false
+	}
+	owner, repo := parts[0], parts[1]
+	return fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo), true
+}
+
+// fetchUpdateMetadataFromGitHubRelease fetches update metadata from a GitHub repo's latest release.
+// Expects release assets: version.txt, kvm_app, kvm_app.sha256, update_system.zip, update_system.zip.sha256
+func fetchUpdateMetadataFromGitHubRelease(ctx context.Context, apiURL string) (*RemoteMetadata, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating GitHub release request: %w", err)
+	}
+
+	client := http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			Proxy:               http.ProxyFromEnvironment,
+			TLSHandshakeTimeout: 30 * time.Second,
+			TLSClientConfig: &tls.Config{
+				RootCAs: rootcerts.ServerCertPool(),
+			},
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching GitHub release: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub release API returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading GitHub release response: %w", err)
+	}
+
+	var release struct {
+		TagName string         `json:"tag_name"`
+		Assets  []releaseAsset `json:"assets"`
+	}
+	if err := json.Unmarshal(body, &release); err != nil {
+		return nil, fmt.Errorf("error parsing GitHub release JSON: %w", err)
+	}
+
+	// Build asset lookup by name
+	assetURLs := make(map[string]string)
+	for _, a := range release.Assets {
+		assetURLs[strings.TrimSpace(a.Name)] = strings.TrimSpace(a.BrowserDownloadURL)
+	}
+
+	// version.txt is required
+	versionURL, ok := assetURLs["version.txt"]
+	if !ok || versionURL == "" {
+		return nil, fmt.Errorf("version.txt not found in GitHub release %s", release.TagName)
+	}
+
+	versionReq, err := http.NewRequestWithContext(ctx, "GET", versionURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating version.txt request: %w", err)
+	}
+	versionResp, err := client.Do(versionReq)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching version.txt: %w", err)
+	}
+	defer versionResp.Body.Close()
+	versionBody, err := io.ReadAll(versionResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading version.txt: %w", err)
+	}
+	appVersion, systemVersion, err := parseVersionTxt(string(versionBody))
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve asset URLs
+	appURL := assetURLs["kvm_app"]
+	appHashURL := assetURLs["kvm_app.sha256"]
+	if appHashURL == "" {
+		appHashURL = assetURLs["kvm_app.sha2565"]
+	}
+	systemURL := assetURLs["update_system.zip"]
+	systemHashURL := assetURLs["update_system.zip.sha256"]
+	if systemHashURL == "" {
+		systemHashURL = assetURLs["update_system.zip.sha2565"]
+	}
+	if systemURL == "" {
+		systemURL = assetURLs["update_system.tar"]
+		systemHashURL = assetURLs["update_system.tar.sha256"]
+	}
+
+	// Fetch hashes
+	var appHash, systemHash string
+	if appHashURL != "" {
+		appHash, _ = fetchSHA256FromURL(ctx, appHashURL)
+	}
+	if systemHashURL != "" {
+		systemHash, _ = fetchSHA256FromURL(ctx, systemHashURL)
+	}
+
+	appSigURL := assetURLs["kvm_app.sig"]
+	systemSigURL := assetURLs["update_system.zip.sig"]
+	if strings.HasSuffix(systemURL, ".tar") {
+		systemSigURL = assetURLs["update_system.tar.sig"]
+	}
+
+	return &RemoteMetadata{
+		AppVersion:    appVersion,
+		AppUrl:        appURL,
+		AppHash:       appHash,
+		AppSigUrl:     appSigURL,
+		SystemVersion: systemVersion,
+		SystemUrl:     systemURL,
+		SystemHash:    systemHash,
+		SystemSigUrl:  systemSigURL,
+	}, nil
+}
+
 func fetchUpdateMetadataFromBaseURL(ctx context.Context, baseURL string) (*RemoteMetadata, error) {
+	// Check if this is a GitHub repo URL — use Releases API instead of flat directory
+	if apiURL, ok := parseGitHubRepoURL(baseURL); ok {
+		return fetchUpdateMetadataFromGitHubRelease(ctx, apiURL)
+	}
+
 	baseURL = normalizeBaseURL(baseURL)
 	versionURL, err := resolveURL(baseURL, "version.txt")
 	if err != nil {
