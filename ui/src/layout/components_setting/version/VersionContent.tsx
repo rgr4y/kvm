@@ -340,14 +340,14 @@ function UpdateSourceSettings({
               label="Custom Base URL"
               value={customUpdateBaseURL}
               onChange={e => onCustomUpdateBaseURLChange(e.target.value)}
-              placeholder="https://example.com/firmware/latest/"
+              placeholder="https://github.com/owner/repo"
             />
             <AntdButton type="primary" onClick={onSaveCustomUpdateBaseURL}>
               {$at("Apply")}
             </AntdButton>
           </div>
           <p className="text-xs text-slate-400">
-            URL must serve: version.txt, kvm_app, kvm_app.sha256, and update_system.zip (.sha256)
+            GitHub repo URL (uses latest release) or direct URL serving version.txt + assets
           </p>
         </div>
       )}
