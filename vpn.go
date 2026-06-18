@@ -885,8 +885,15 @@ func rpcGetWireguardInfo() (string, error) {
 }
 
 func initVPN() {
-	waitVpnCtrlClientConnected()
 	go func() {
+		// Wait for VPN ctrl client with timeout — don't block main thread
+		select {
+		case <-vpnCtrlClientConnected:
+			vpnLogger.Info().Msg("VPN ctrl client connected")
+		case <-time.After(30 * time.Second):
+			vpnLogger.Error().Msg("VPN ctrl client did not connect within 30s, skipping VPN init (kvm_vpn may have failed to start)")
+			return
+		}
 		for {
 			if !networkState.IsOnline() {
 				vpnLogger.Warn().Msg("waiting for network to be online, will retry in 3 seconds")
