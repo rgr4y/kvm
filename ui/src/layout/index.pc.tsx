@@ -740,9 +740,18 @@ export default function PCHome() {
 
 
   const outlet = useOutlet();
+  const skipModalCloseAnimation = useUiStore(state => state.skipModalCloseAnimation);
+  const setSkipModalCloseAnimation = useUiStore(state => state.setSkipModalCloseAnimation);
   const onModalClose = useCallback(() => {
     if (location.pathname !== "/other-session") navigateTo("/");
   }, [navigateTo, location.pathname]);
+
+  // Reset skip flag after modal finishes closing
+  useEffect(() => {
+    if (outlet === null && skipModalCloseAnimation) {
+      setSkipModalCloseAnimation(false);
+    }
+  }, [outlet, skipModalCloseAnimation, setSkipModalCloseAnimation]);
 
   const appVersion = useDeviceStore(state => state.appVersion);
   const systemVersion = useDeviceStore(state => state.systemVersion);
@@ -900,7 +909,7 @@ export default function PCHome() {
           if (e.key === "Escape") navigateTo("/");
         }}
       >
-        <Modal open={outlet !== null} onClose={onModalClose}>
+        <Modal open={outlet !== null} onClose={onModalClose} skipCloseAnimation={skipModalCloseAnimation}>
           {/* The 'used by other session' modal needs to have access to the connectWebRTC function */}
           <Outlet context={{ setupPeerConnection }} />
         </Modal>

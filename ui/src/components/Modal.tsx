@@ -8,17 +8,24 @@ const Modal = React.memo(function Modal({
   className,
   open,
   onClose,
+  skipCloseAnimation = false,
 }: {
   children: React.ReactNode;
   className?: string;
   open: boolean;
   onClose: () => void;
+  skipCloseAnimation?: boolean;
 }) {
+  const leaveDuration = skipCloseAnimation ? "data-leave:duration-0" : "data-leave:duration-200";
+
   return (
     <Dialog open={open} onClose={onClose} className="relative z-20">
       <DialogBackdrop
         transition
-        className="fixed inset-0 bg-gray-500/75 transition-opacity data-closed:opacity-0 data-enter:duration-500 data-leave:duration-200 data-enter:ease-out data-leave:ease-in dark:bg-slate-900/90"
+        className={cx(
+          "fixed inset-0 bg-gray-500/75 transition-opacity data-closed:opacity-0 data-enter:duration-500 data-enter:ease-out data-leave:ease-in dark:bg-slate-900/90",
+          leaveDuration,
+        )}
       />
       <div className="fixed inset-0 z-20 w-screen overflow-y-auto" style={{
         scrollbarGutter: 'stable'
@@ -29,7 +36,8 @@ const Modal = React.memo(function Modal({
             transition
             className={cx(
               "pointer-events-none relative w-full md:my-8 md:mt-[10vh]!",
-              "transform transition-all data-closed:translate-y-8 data-closed:opacity-0 data-enter:duration-500 data-leave:duration-200 data-enter:ease-out data-leave:ease-in",
+              "transform transition-all data-closed:translate-y-8 data-closed:opacity-0 data-enter:duration-500 data-enter:ease-out data-leave:ease-in",
+              leaveDuration,
               className,
             )}
           >

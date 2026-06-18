@@ -176,6 +176,7 @@ func setupRouter() *gin.Engine {
 		protected.GET("/storage/download", handleDownloadHttp)
 		protected.GET("/storage/sd-download", handleSDDownloadHttp)
 		protected.POST("/api/rpc", handleRpcRequest)
+		protected.GET("/api/session/active", handleSessionActive)
 		protected.GET("/api/ice-servers", handleGetIceServers)
 		protected.GET("/terminal/ws", handleTerminalWS)
 		protected.GET("/serial/ws", handleSerialWS)
@@ -197,12 +198,13 @@ func setupRouter() *gin.Engine {
 var currentSession *Session
 
 var (
-	currentHTTPSessionID    string
-	httpSessionToNotify     string
-	httpSessionMu           sync.Mutex
-	httpSessionLockVersion  int64
-	httpSessionSeenVersions map[string]int64
-	invalidHTTPSessions     map[string]bool
+	currentHTTPSessionID      string
+	httpSessionToNotify       string
+	httpSessionMu             sync.Mutex
+	httpSessionLockVersion    int64
+	httpSessionSeenVersions   map[string]int64
+	invalidHTTPSessions       map[string]bool
+	httpSessionLastActivityAt time.Time
 )
 
 func handleWebRTCSession(c *gin.Context) {
@@ -822,6 +824,7 @@ func handleRpcRequest(c *gin.Context) {
 		httpSessionLockVersion++
 		currentHTTPSessionID = sessionID
 		httpSessionToNotify = ""
+		httpSessionLastActivityAt = time.Now()
 		httpSessionSeenVersions[sessionID] = httpSessionLockVersion
 
 		for id := range httpSessionSeenVersions {
@@ -861,16 +864,20 @@ func handleRpcRequest(c *gin.Context) {
 
 			if currentHTTPSessionID == "" {
 				currentHTTPSessionID = sessionID
+				httpSessionLastActivityAt = time.Now()
 			} else if sessionID == httpSessionToNotify {
 				event = &JSONRPCEvent{
 					JSONRPC: "2.0",
 					Method:  "otherSessionConnected",
 				}
 				httpSessionToNotify = ""
-			} else if sessionID != currentHTTPSessionID {
+			} else if sessionID == currentHTTPSessionID {
+				httpSessionLastActivityAt = time.Now()
+			} else {
 				if version, ok := httpSessionSeenVersions[sessionID]; ok && version >= httpSessionLockVersion {
 					httpSessionToNotify = currentHTTPSessionID
 					currentHTTPSessionID = sessionID
+					httpSessionLastActivityAt = time.Now()
 				}
 			}
 
@@ -919,6 +926,20 @@ func handleRpcRequest(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func handleSessionActive(c *gin.Context) {
+	callerSessionID := c.GetHeader("X-Session-ID")
+
+	httpSessionMu.Lock()
+	hasWebRTC := currentSession != nil
+	httpStale := time.Since(httpSessionLastActivityAt) > 5*time.Second
+	hasOtherHTTP := currentHTTPSessionID != "" &&
+		currentHTTPSessionID != callerSessionID &&
+		!httpStale
+	httpSessionMu.Unlock()
+
+	c.JSON(http.StatusOK, gin.H{"active": hasWebRTC || hasOtherHTTP})
 }
 
 func handleGetIceServers(c *gin.Context) {

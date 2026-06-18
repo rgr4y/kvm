@@ -83,6 +83,9 @@ interface UIState {
   setTerminalType: (enabled: UIState["terminalType"]) => void;
   otherSession:boolean;
   setOtherSession: (enabled: boolean) => void;
+
+  skipModalCloseAnimation: boolean;
+  setSkipModalCloseAnimation: (skip: boolean) => void;
 }
 
 export const useUiStore = create<UIState>(set => ({
@@ -126,6 +129,9 @@ export const useUiStore = create<UIState>(set => ({
 
     otherSession:false,
     setOtherSession: enabled => set({ otherSession: enabled }),
+
+    skipModalCloseAnimation: false,
+    setSkipModalCloseAnimation: skip => set({ skipModalCloseAnimation: skip }),
 
   isAttachedVirtualKeyboardVisible: true,
   setAttachedVirtualKeyboardVisibility: enabled =>
@@ -518,7 +524,7 @@ export const useSettingsStore = create(
       setPasteShortcut: shortcut => set({ pasteShortcut: shortcut }),
       ocrShortcutEnabled: true,
       setOcrShortcutEnabled: enabled => set({ ocrShortcutEnabled: enabled }),
-      ocrShortcut: "Ctrl+C",
+      ocrShortcut: "Ctrl+Shift+C",
       setOcrShortcut: shortcut => set({ ocrShortcut: shortcut }),
 
       // Video enhancement settings with default values (1.0 = normal)

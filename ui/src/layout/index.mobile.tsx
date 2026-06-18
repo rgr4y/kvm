@@ -555,6 +555,8 @@ export default function MobileHome() {
   const setZeroTierIP = useVpnStore(state => state.setZeroTierIP);
   const otherSession = useUiStore(state => state.otherSession);
   const setOtherSession = useUiStore(state => state.setOtherSession);
+  const skipModalCloseAnimation = useUiStore(state => state.skipModalCloseAnimation);
+  const setSkipModalCloseAnimation = useUiStore(state => state.setSkipModalCloseAnimation);
   const updateVpnStates = () => {
     // TailScaleState
     if (tailScaleConnectionState !== "connecting" && tailScaleConnectionState !== "closed") {
@@ -737,6 +739,13 @@ export default function MobileHome() {
     if (location.pathname !== "/other-session") navigateTo("/");
   }, [navigateTo, location.pathname]);
 
+  // Reset skip flag after modal/other-session finishes closing
+  useEffect(() => {
+    if (!otherSession && outlet === null && skipModalCloseAnimation) {
+      setSkipModalCloseAnimation(false);
+    }
+  }, [otherSession, outlet, skipModalCloseAnimation, setSkipModalCloseAnimation]);
+
   const appVersion = useDeviceStore(state => state.appVersion);
   const systemVersion = useDeviceStore(state => state.systemVersion);
   const setAppVersion = useDeviceStore(state => state.setAppVersion);
@@ -906,13 +915,15 @@ useEffect(() => {
           if (e.key === "Escape") navigateTo("/");
         }}
       >
-        <Modal open={outlet !== null} onClose={onModalClose}>
+        <Modal open={outlet !== null} onClose={onModalClose} skipCloseAnimation={skipModalCloseAnimation}>
           {/* The 'used by other session' modal needs to have access to the connectWebRTC function */}
           <Outlet context={{ setupPeerConnection }} />
         </Modal>
         <AntdModal
           open={otherSession}
           modalRender={OtherSessionRoute}
+          transitionName={skipModalCloseAnimation ? "" : undefined}
+          maskTransitionName={skipModalCloseAnimation ? "" : undefined}
         >
 
         </AntdModal>
