@@ -181,7 +181,6 @@ export default function SettingsVideoSide() {
   const [streamEncodecType, setStreamEncodecType] = useState("avc");
   const [customEdidValue, setCustomEdidValue] = useState<string | null>(null);
   const [edid, setEdid] = useState<string | null>(null);
-  const [forceHpd, setForceHpd] = useState(false);
   const [videoRcConfig, setVideoRcConfig] = useState<VideoRcConfig>(DEFAULT_VIDEO_RC_CONFIG);
   const [rcSliderValues, setRcSliderValues] = useState<RcSliderState>(
     sliderStateFromConfig(DEFAULT_VIDEO_RC_CONFIG),
@@ -373,29 +372,7 @@ export default function SettingsVideoSide() {
       }
     });
 
-    send("getForceHpd", {}, resp => {
-      if ("error" in resp) {
-        notifications.error(`Failed to get force EDID output: ${resp.error.data || "Unknown error"}`);
-        setForceHpd(false);
-        return;
-      }
-
-      setForceHpd(resp.result as boolean);
-    });
   }, [send]);
-
-  const handleForceHpdChange = (checked: boolean) => {
-    send("setForceHpd", { forceHpd: checked }, resp => {
-      if ("error" in resp) {
-        notifications.error(`Failed to set force EDID output: ${resp.error.data || "Unknown error"}`);
-        setForceHpd(!checked);
-        return;
-      }
-
-      notifications.success(`Force EDID output ${checked ? "enabled" : "disabled"}`);
-      setForceHpd(checked);
-    });
-  };
 
   const handleStreamEncodecTypeChange = (encodecType: string) => {
     send("setStreamEncodecType", { encodecType }, resp => {
@@ -704,21 +681,6 @@ export default function SettingsVideoSide() {
               }}
             >{$at("Reset to Default")}</AntdButton>
           </div>
-        </div>
-
-        {/* EDID Force Output Setting */}
-        <div className="w-full animate-fadeIn opacity-0" style={{ animationDuration: "0.7s", animationDelay: "0.1s" }}>
-          <SettingsItem
-            title={$at("Force EDID Output")}
-            description={$at("Force EDID output even when no display is connected")}
-            noCol
-            className="flex-row items-center"
-          >
-            <Checkbox
-              checked={forceHpd}
-              onChange={e => handleForceHpdChange(e.target.checked)}
-            />
-          </SettingsItem>
         </div>
 
         <SettingsItem
