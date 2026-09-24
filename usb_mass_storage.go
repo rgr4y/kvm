@@ -208,11 +208,21 @@ func rpcGetVirtualMediaState() (*VirtualMediaState, error) {
 func rpcUnmountImage() error {
 	virtualMediaStateMutex.Lock()
 	defer virtualMediaStateMutex.Unlock()
-	err := setMassStorageImage("\n")
-	if err != nil {
-		logger.Warn().Err(err).Msg("Remove Mass Storage Image Error")
+
+	var err error
+	for i := 0; i < 3; i++ {
+		err = setMassStorageImage("\n")
+		if err == nil {
+			break
+		}
+		logger.Warn().Err(err).Int("attempt", i+1).Msg("unmount attempt failed, retrying...")
+		time.Sleep(time.Duration(i+1) * 500 * time.Millisecond)
 	}
-	//TODO: check if we still need it
+	if err != nil {
+		logger.Warn().Err(err).Msg("Remove Mass Storage Image Error after retries")
+		return fmt.Errorf("device or resource busy")
+	}
+
 	time.Sleep(500 * time.Millisecond)
 	if nbdDevice != nil {
 		nbdDevice.Close()
@@ -410,7 +420,18 @@ func rpcMountWithStorage(filename string, mode VirtualMediaMode) error {
 	virtualMediaStateMutex.Lock()
 	defer virtualMediaStateMutex.Unlock()
 	if currentVirtualMediaState != nil {
-		return fmt.Errorf("another virtual media is already mounted")
+		// Auto-unmount before mounting new image
+		logger.Info().Msg("auto-unmounting current image before mounting new one")
+		if err := setMassStorageImage("\n"); err != nil {
+			logger.Warn().Err(err).Msg("failed to unmount current image")
+		}
+		time.Sleep(500 * time.Millisecond)
+		if nbdDevice != nil {
+			nbdDevice.Close()
+			nbdDevice = nil
+		}
+		currentVirtualMediaState = nil
+		clearPersistedVirtualMediaState()
 	}
 
 	fullPath := filepath.Join(imagesFolder, filename)
@@ -447,7 +468,18 @@ func rpcMountWithSDStorage(filename string, mode VirtualMediaMode) error {
 	virtualMediaStateMutex.Lock()
 	defer virtualMediaStateMutex.Unlock()
 	if currentVirtualMediaState != nil {
-		return fmt.Errorf("another virtual media is already mounted")
+		// Auto-unmount before mounting new image
+		logger.Info().Msg("auto-unmounting current image before mounting new one")
+		if err := setMassStorageImage("\n"); err != nil {
+			logger.Warn().Err(err).Msg("failed to unmount current image")
+		}
+		time.Sleep(500 * time.Millisecond)
+		if nbdDevice != nil {
+			nbdDevice.Close()
+			nbdDevice = nil
+		}
+		currentVirtualMediaState = nil
+		clearPersistedVirtualMediaState()
 	}
 
 	fullPath := filepath.Join(SDImagesFolder, filename)
@@ -561,6 +593,14 @@ func rpcDeleteStorageFile(filename string) error {
 	err = os.Remove(fullPath)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %v", err)
+	}
+
+	// Clear auto-mount config if the deleted file was set for auto-mount
+	if config.AutoMountImage != nil && config.AutoMountImage.Filename == sanitizedFilename && config.AutoMountImage.Source == "kvm" {
+		config.AutoMountImage = nil
+		if err := SaveConfig(); err != nil {
+			usbLogger.Warn().Err(err).Msg("failed to clear auto-mount config after file deletion")
+		}
 	}
 
 	return nil
@@ -993,6 +1033,14 @@ func rpcDeleteSDStorageFile(filename string) error {
 		return fmt.Errorf("failed to delete file: %v", err)
 	}
 
+	// Clear auto-mount config if the deleted file was set for auto-mount
+	if config.AutoMountImage != nil && config.AutoMountImage.Filename == sanitizedFilename && config.AutoMountImage.Source == "sd" {
+		config.AutoMountImage = nil
+		if err := SaveConfig(); err != nil {
+			usbLogger.Warn().Err(err).Msg("failed to clear auto-mount config after file deletion")
+		}
+	}
+
 	return nil
 }
 
@@ -1010,6 +1058,11 @@ type SDMountStatusResponse struct {
 }
 
 func rpcGetSDMountStatus() (*SDMountStatusResponse, error) {
+	// If system is booting from SD card, SD storage is not available as separate mount
+	if IsBootFromSD() {
+		return &SDMountStatusResponse{Status: SDMountFail, Reason: "boot_device"}, nil
+	}
+
 	if _, err := os.Stat("/dev/mmcblk1"); os.IsNotExist(err) {
 		return &SDMountStatusResponse{Status: SDMountNone}, nil
 	}
@@ -1023,7 +1076,8 @@ func rpcGetSDMountStatus() (*SDMountStatusResponse, error) {
 		return &SDMountStatusResponse{Status: SDMountFail, Reason: "check_mount_failed"}, fmt.Errorf("failed to check mount status: %v", err)
 	}
 
-	if strings.Contains(string(output), "/dev/mmcblk1p1 on /mnt/sdcard") {
+	mountOutput := string(output)
+	if strings.Contains(mountOutput, "/dev/mmcblk1p1 on /mnt/sdcard") {
 		return &SDMountStatusResponse{Status: SDMountOK}, nil
 	}
 
