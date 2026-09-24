@@ -92,8 +92,6 @@ type Config struct {
 	STUN                       string                 `json:"stun"`
 	TurnServers                []TurnServer           `json:"turn_servers"`
 	JigglerEnabled             bool                   `json:"jiggler_enabled"`
-	AutoUpdateEnabled          bool                   `json:"auto_update_enabled"`
-	IncludePreRelease          bool                   `json:"include_pre_release"`
 	UpdateDownloadProxy        string                 `json:"update_download_proxy"`
 	HashedPassword             string                 `json:"hashed_password"`
 	LocalAuthToken             string                 `json:"local_auth_token"`
@@ -130,7 +128,6 @@ type Config struct {
 	TimeZone                   string                 `json:"time_zone"`
 	LEDGreenMode               string                 `json:"led_green_mode"`
 	LEDYellowMode              string                 `json:"led_yellow_mode"`
-	AutoMountSystemInfo        bool                   `json:"auto_mount_system_info_img"`
 	AutoMountImage             *AutoMountImageConfig  `json:"auto_mount_image,omitempty"`
 	EasytierAutoStart          bool                   `json:"easytier_autostart"`
 	EasytierConfig             EasytierConfig         `json:"easytier_config"`
