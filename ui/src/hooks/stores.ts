@@ -430,6 +430,9 @@ interface SettingsState {
   scrollThrottling: number;
   setScrollThrottling: (value: number) => void;
 
+  mouseSensitivity: number;
+  setMouseSensitivity: (value: number) => void;
+
   invertScroll: boolean;
   setInvertScroll: (enabled: boolean) => void;
 
@@ -509,6 +512,9 @@ export const useSettingsStore = create(
 
       scrollThrottling: 0,
       setScrollThrottling: value => set({ scrollThrottling: value }),
+
+      mouseSensitivity: 1.0,
+      setMouseSensitivity: value => set({ mouseSensitivity: value }),
 
       invertScroll: false,
       setInvertScroll: enabled => set({ invertScroll: enabled }),
@@ -757,6 +763,22 @@ export interface UpdateState {
   isUpdatePending: boolean;
   setIsUpdatePending: (isPending: boolean) => void;
   updateDialogHasBeenMinimized: boolean;
+  versionUpdateSource: string;
+  setVersionUpdateSource: (source: string) => void;
+  versionLocalPackageInfo: {
+    appVersion: string;
+    systemVersion: string;
+    hasApp: boolean;
+    hasSystem: boolean;
+  } | null;
+  setVersionLocalPackageInfo: (
+    info: {
+      appVersion: string;
+      systemVersion: string;
+      hasApp: boolean;
+      hasSystem: boolean;
+    } | null,
+  ) => void;
   otaState: {
     updating: boolean;
     error: string | null;
@@ -813,6 +835,10 @@ export interface UpdateState {
 export const useUpdateStore = create<UpdateState>(set => ({
   isUpdatePending: false,
   setIsUpdatePending: isPending => set({ isUpdatePending: isPending }),
+  versionUpdateSource: "github",
+  setVersionUpdateSource: source => set({ versionUpdateSource: source }),
+  versionLocalPackageInfo: null,
+  setVersionLocalPackageInfo: info => set({ versionLocalPackageInfo: info }),
 
   setOtaState: state =>
     set(current => {

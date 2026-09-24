@@ -20,7 +20,7 @@ export const useMouseEvents = (
   disableTouchClick?: boolean,
   externalButtons = 0
 ) => {
-  const [send] = useJsonRpc();
+  const [, sendNotification] = useJsonRpc();
   const [blockWheelEvent, setBlockWheelEvent] = useState(false);
   const settings = useSettingsStore();
   const { setMousePosition, setMouseMove } = useMouseStore();
@@ -28,8 +28,16 @@ export const useMouseEvents = (
   const isReinitializingGadget = useHidStore(state => state.isReinitializingGadget);
   const { reportAbsMouseEvent, reportRelMouseEvent, rpcHidReady } = useHidRpc();
   const touchDragActiveRef = useRef(false);
+  const relMouseFrameRef = useRef<number | null>(null);
+  const absMouseFrameRef = useRef<number | null>(null);
+  const pendingRelMouseRef = useRef<{ x: number; y: number; buttons: number } | null>(null);
+  const pendingAbsMouseRef = useRef<{ x: number; y: number; buttons: number } | null>(null);
 
-  const calcDelta = (pos: number) => (Math.abs(pos) < 10 ? pos * 2 : pos);
+  const calcDelta = (pos: number) => {
+    const sensitivity = settings.mouseSensitivity || 1.0;
+    const scaledPos = pos * sensitivity;
+    return Math.abs(scaledPos) < 10 ? scaledPos * 2 : scaledPos;
+  };
 
   const sendRelMouseMovement = useCallback(
     (x: number, y: number, buttons: number, force = false) => {
@@ -41,11 +49,11 @@ export const useMouseEvents = (
       if (rpcHidReady) {
         reportRelMouseEvent(dx, dy, buttons);
       } else {
-        send("relMouseReport", { dx, dy, buttons });
+        sendNotification("relMouseReport", { dx, dy, buttons });
       }
       setMouseMove({ x, y, buttons });
     },
-    [send, setMouseMove, settings.mouseMode, isReinitializingGadget, rpcHidReady, reportRelMouseEvent],
+    [sendNotification, setMouseMove, settings.mouseMode, settings.mouseSensitivity, isReinitializingGadget, rpcHidReady, reportRelMouseEvent],
   );
 
   const sendAbsMouseMovement = useCallback(
@@ -56,11 +64,11 @@ export const useMouseEvents = (
       if (rpcHidReady) {
         reportAbsMouseEvent(x, y, buttons);
       } else {
-        send("absMouseReport", { x, y, buttons });
+        sendNotification("absMouseReport", { x, y, buttons });
       }
       setMousePosition(x, y);
     },
-    [send, setMousePosition, settings.mouseMode, isReinitializingGadget, rpcHidReady, reportAbsMouseEvent],
+    [sendNotification, setMousePosition, settings.mouseMode, isReinitializingGadget, rpcHidReady, reportAbsMouseEvent],
   );
 
   const sendVirtualRelativeMovement = useCallback(
@@ -70,9 +78,53 @@ export const useMouseEvents = (
     [sendRelMouseMovement],
   );
 
+  const queueRelMouseMovement = useCallback(
+    (x: number, y: number, buttons: number) => {
+      const pending = pendingRelMouseRef.current;
+      if (pending) {
+        pending.x += x;
+        pending.y += y;
+        pending.buttons = buttons;
+      } else {
+        pendingRelMouseRef.current = { x, y, buttons };
+      }
+
+      if (relMouseFrameRef.current !== null) return;
+
+      // Merge high-frequency pointermove events into a single RPC per frame.
+      relMouseFrameRef.current = requestAnimationFrame(() => {
+        relMouseFrameRef.current = null;
+        const next = pendingRelMouseRef.current;
+        pendingRelMouseRef.current = null;
+        if (!next) return;
+        sendRelMouseMovement(next.x, next.y, next.buttons);
+      });
+    },
+    [sendRelMouseMovement],
+  );
+
+  const queueAbsMouseMovement = useCallback(
+    (x: number, y: number, buttons: number) => {
+      pendingAbsMouseRef.current = { x, y, buttons };
+
+      if (absMouseFrameRef.current !== null) return;
+
+      // Absolute mode only needs the latest pointer position for the next frame.
+      absMouseFrameRef.current = requestAnimationFrame(() => {
+        absMouseFrameRef.current = null;
+        const next = pendingAbsMouseRef.current;
+        pendingAbsMouseRef.current = null;
+        if (!next) return;
+        sendAbsMouseMovement(next.x, next.y, next.buttons);
+      });
+    },
+    [sendAbsMouseMovement],
+  );
+
   const relMouseMoveHandler = useCallback(
     (e: MouseEvent) => {
       const pt = (e as unknown as PointerEvent).pointerType as unknown as string;
+      const eventType = (e as unknown as PointerEvent).type;
       if (pt === "touch") {
         if (touchZoom) {
             const touchCount = touchZoom.activeTouchPointers.current.size;
@@ -88,9 +140,14 @@ export const useMouseEvents = (
       if (!pointerLock.isPointerLockActive && pointerLock.isPointerLockPossible) return;
 
       const { buttons } = e;
+      if (eventType === "pointermove") {
+        queueRelMouseMovement(e.movementX, e.movementY, buttons);
+        return;
+      }
+
       sendRelMouseMovement(e.movementX, e.movementY, buttons);
     },
-    [pointerLock.isPointerLockActive, pointerLock.isPointerLockPossible, sendRelMouseMovement, settings.mouseMode, touchZoom],
+    [pointerLock.isPointerLockActive, pointerLock.isPointerLockPossible, queueRelMouseMovement, sendRelMouseMovement, settings.mouseMode, touchZoom],
   );
 
   const absMouseMoveHandler = useCallback(
@@ -174,9 +231,14 @@ export const useMouseEvents = (
 
       buttons |= externalButtons;
 
+      if (eventType === "pointermove") {
+        queueAbsMouseMovement(x, y, buttons);
+        return;
+      }
+
       sendAbsMouseMovement(x, y, buttons);
     },
-    [settings.mouseMode, videoElm, videoWidth, videoHeight, sendAbsMouseMovement, touchZoom, disableTouchClick, externalButtons],
+    [settings.mouseMode, videoElm, videoWidth, videoHeight, queueAbsMouseMovement, sendAbsMouseMovement, touchZoom, disableTouchClick, externalButtons],
   );
 
 
@@ -198,14 +260,14 @@ export const useMouseEvents = (
       const clampedScrollValue = Math.max(-127, Math.min(127, scrollValue));
       const wheelY = settings.invertScroll ? clampedScrollValue : -clampedScrollValue;
 
-      send("wheelReport", { wheelY, mouseMode: settings.mouseMode });
+      sendNotification("wheelReport", { wheelY, mouseMode: settings.mouseMode });
 
       if (settings.scrollThrottling && !blockWheelEvent) {
         setBlockWheelEvent(true);
         setTimeout(() => setBlockWheelEvent(false), settings.scrollThrottling);
       }
     },
-    [send, blockWheelEvent, settings, isReinitializingGadget],
+    [sendNotification, blockWheelEvent, settings, isReinitializingGadget],
   );
 
   const resetMousePosition = useCallback(() => {
@@ -233,7 +295,6 @@ export const useMouseEvents = (
       }
     };
 
-    videoElmRefValue.addEventListener("mousemove", eventHandler, { signal });
     videoElmRefValue.addEventListener("pointermove", eventHandler, { signal });
     videoElmRefValue.addEventListener("pointerdown", eventHandler, { signal });
     videoElmRefValue.addEventListener("pointerup", eventHandler, { signal });
@@ -261,6 +322,16 @@ export const useMouseEvents = (
     videoElmRefValue.addEventListener("contextmenu", preventContextMenu, { signal });
 
     return () => {
+      if (relMouseFrameRef.current !== null) {
+        cancelAnimationFrame(relMouseFrameRef.current);
+        relMouseFrameRef.current = null;
+      }
+      if (absMouseFrameRef.current !== null) {
+        cancelAnimationFrame(absMouseFrameRef.current);
+        absMouseFrameRef.current = null;
+      }
+      pendingRelMouseRef.current = null;
+      pendingAbsMouseRef.current = null;
       abortController.abort();
     };
   }, [
