@@ -18,27 +18,32 @@ const { Text } = Typography;
 
 const defaultEdid =
   "00ffffffffffff0052620188008888881c150103800000780a0dc9a05747982712484c00000001010101010101010101010101010101023a801871382d40582c4500c48e2100001e011d007251d01e206e285500c48e2100001e000000fc00543734392d6648443732300a20000000fd00147801ff1d000a202020202020017b";
-const edids = [
-  {
-    value: defaultEdid.toUpperCase(),
-    label: "KVM Default",
-  },
-  {
-    value:
-      "00FFFFFFFFFFFF00047265058A3F6101101E0104A53420783FC125A8554EA0260D5054BFEF80714F8140818081C081008B009500B300283C80A070B023403020360006442100001A000000FD00304C575716010A202020202020000000FC0042323436574C0A202020202020000000FF0054384E4545303033383532320A01F802031CF14F90020304050607011112131415161F2309070783010000011D8018711C1620582C250006442100009E011D007251D01E206E28550006442100001E8C0AD08A20E02D10103E9600064421000018C344806E70B028401720A80406442100001E00000000000000000000000000000000000000000000000000000096",
-    label: "Acer B246WL, 1920x1200",
-  },
-  {
-    value:
-      "00FFFFFFFFFFFF0006B3872401010101021F010380342078EA6DB5A7564EA0250D5054BF6F00714F8180814081C0A9409500B300D1C0283C80A070B023403020360006442100001A000000FD00314B1E5F19000A202020202020000000FC00504132343851560A2020202020000000FF004D314C4D51533035323135370A014D02032AF14B900504030201111213141F230907078301000065030C001000681A00000101314BE6E2006A023A801871382D40582C450006442100001ECD5F80B072B0374088D0360006442100001C011D007251D01E206E28550006442100001E8C0AD08A20E02D10103E960006442100001800000000000000000000000000DC",
-    label: "ASUS PA248QV, 1920x1200",
-  },
-  {
-    value:
-      "00FFFFFFFFFFFF0010AC132045393639201E0103803C22782ACD25A3574B9F270D5054A54B00714F8180A9C0D1C00101010101010101023A801871382D40582C450056502100001E000000FF00335335475132330A2020202020000000FC0044454C4C204432373231480A20000000FD00384C1E5311000A202020202020018102031AB14F90050403020716010611121513141F65030C001000023A801871382D40582C450056502100001E011D8018711C1620582C250056502100009E011D007251D01E206E28550056502100001E8C0AD08A20E02D10103E960056502100001800000000000000000000000000000000000000000000000000000000004F",
-    label: "DELL D2721H, 1920x1080",
-  },
-];
+// EDID presets are served by the backend (getEDIDPresets) as capability-labeled
+// modes, so the list can't drift from the blobs the device actually ships.
+type EdidCaps = {
+  maxRes: string;
+  refresh: number;
+  hdr: boolean;
+  audio: boolean;
+};
+type EdidPreset = {
+  id: string;
+  label: string;
+  caps: EdidCaps;
+  edidHex: string;
+  disabled: boolean;
+  note?: string;
+};
+
+// Build a "· 1920x1080 · 60Hz · audio" suffix from parsed caps for the dropdown.
+const edidCapsSummary = (caps?: EdidCaps): string => {
+  if (!caps || !caps.maxRes) return "";
+  const parts = [caps.maxRes];
+  if (caps.refresh) parts.push(`${caps.refresh}Hz`);
+  parts.push(caps.audio ? "audio" : "no audio");
+  if (caps.hdr) parts.push("HDR");
+  return parts.join(" · ");
+};
 
 const streamQualityOptions = [
   { value: "1", label: "High" },
@@ -181,6 +186,7 @@ export default function SettingsVideoSide() {
   const [streamEncodecType, setStreamEncodecType] = useState("avc");
   const [customEdidValue, setCustomEdidValue] = useState<string | null>(null);
   const [edid, setEdid] = useState<string | null>(null);
+  const [edidPresets, setEdidPresets] = useState<EdidPreset[]>([]);
   const [videoRcConfig, setVideoRcConfig] = useState<VideoRcConfig>(DEFAULT_VIDEO_RC_CONFIG);
   const [rcSliderValues, setRcSliderValues] = useState<RcSliderState>(
     sliderStateFromConfig(DEFAULT_VIDEO_RC_CONFIG),
@@ -349,27 +355,33 @@ export default function SettingsVideoSide() {
       setRcSliderValues(sliderStateFromConfig(rc));
     });
 
-    send("getEDID", {}, resp => {
-      if ("error" in resp) {
-        notifications.error(`Failed to get EDID: ${resp.error.data || "Unknown error"}`);
-        return;
-      }
+    // Fetch capability-labeled presets first, then reconcile the active EDID
+    // against them by hex (using the fetched list, not state, to avoid a race).
+    send("getEDIDPresets", {}, presetsResp => {
+      const presets =
+        "error" in presetsResp ? [] : (presetsResp.result as EdidPreset[]);
+      setEdidPresets(presets);
 
-      const receivedEdid = resp.result as string;
+      send("getEDID", {}, resp => {
+        if ("error" in resp) {
+          notifications.error(`Failed to get EDID: ${resp.error.data || "Unknown error"}`);
+          return;
+        }
 
-      const matchingEdid = edids.find(
-        x => x.value.toLowerCase() === receivedEdid.toLowerCase(),
-      );
+        const receivedEdid = resp.result as string;
 
-      if (matchingEdid) {
-        // EDID is stored in uppercase in the UI
-        setEdid(matchingEdid.value.toUpperCase());
-        // Reset custom EDID value
-        setCustomEdidValue(null);
-      } else {
-        setEdid("custom");
-        setCustomEdidValue(receivedEdid);
-      }
+        const match = presets.find(
+          p => p.edidHex && p.edidHex.toLowerCase() === receivedEdid.toLowerCase(),
+        );
+
+        if (match) {
+          setEdid(match.id);
+          setCustomEdidValue(null);
+        } else {
+          setEdid("custom");
+          setCustomEdidValue(receivedEdid);
+        }
+      });
     });
 
   }, [send]);
@@ -418,6 +430,7 @@ export default function SettingsVideoSide() {
     });
   };
 
+  // Raw-hex path (Custom / restore-default): set the blob directly.
   const handleEDIDChange = (newEdid: string) => {
     send("setEDID", { edid: newEdid }, resp => {
       if ("error" in resp) {
@@ -425,11 +438,23 @@ export default function SettingsVideoSide() {
         return;
       }
 
-      notifications.success(
-        `EDID set successfully to ${edids.find(x => x.value === newEdid)?.label}`,
-      );
-      // Update the EDID value in the UI
-      setEdid(newEdid);
+      notifications.success("Custom EDID set successfully");
+      // Custom blob is active; clear any preset selection.
+      setEdid("custom");
+    });
+  };
+
+  // Preset path: apply a capability-labeled mode by id (backend owns the blob).
+  const handleEDIDPresetChange = (id: string) => {
+    send("setEDIDPreset", { id }, resp => {
+      if ("error" in resp) {
+        notifications.error(`Failed to set EDID: ${resp.error.data || "Unknown error"}`);
+        return;
+      }
+
+      const preset = edidPresets.find(p => p.id === id);
+      notifications.success(`EDID set to ${preset?.label ?? id}`);
+      setEdid(id);
     });
   };
 
@@ -700,10 +725,20 @@ export default function SettingsVideoSide() {
                 setCustomEdidValue("");
               } else {
                 setCustomEdidValue(null);
-                handleEDIDChange(e);
+                handleEDIDPresetChange(e);
               }
             }}
-            options={[...edids, { value: "custom", label: "Custom" }]}
+            options={[
+              ...edidPresets.map(p => {
+                const summary = edidCapsSummary(p.caps);
+                return {
+                  value: p.id,
+                  label: summary ? `${p.label} · ${summary}` : p.label,
+                  disabled: p.disabled,
+                };
+              }),
+              { value: "custom", label: "Custom" },
+            ]}
           />
         </SettingsItem>
 
