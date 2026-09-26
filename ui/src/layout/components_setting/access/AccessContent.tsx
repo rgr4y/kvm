@@ -148,6 +148,10 @@ export interface TLSState {
   mode: "self-signed" | "custom" | "disabled";
   certificate?: string;
   privateKey?: string;
+  source?: "pem" | "tailscale";
+  domain?: string;
+  commonName?: string;
+  notAfter?: string;
 }
 
 const loader = async () => {
@@ -182,6 +186,11 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
   const [tlsMode, setTlsMode] = useState<string>("disabled");
   const [tlsCert, setTlsCert] = useState<string>("");
   const [tlsKey, setTlsKey] = useState<string>("");
+  const [tlsSource, setTlsSource] = useState<"pem" | "tailscale">("pem");
+  const [tlsDomain, setTlsDomain] = useState<string>("");
+  const [tlsCommonName, setTlsCommonName] = useState<string>("");
+  const [tlsNotAfter, setTlsNotAfter] = useState<string>("");
+  const [tlsHasStoredCert, setTlsHasStoredCert] = useState<boolean>(false);
 
   const [activeTab, setActiveTab] = useState("tailscale");
   const [vpnAutoStartStatusMap, setVpnAutoStartStatusMap] = useState<Record<string, VpnAutoStartStatusResponse>>({});
@@ -297,10 +306,31 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
 	});
 
 
+  const refreshTlsState = useCallback(() => {
+    send("getTLSState", {}, resp => {
+      if ("error" in resp) {
+        console.error(resp.error);
+        return;
+      }
+      const tlsState = resp.result as TLSState;
+      setTlsMode(tlsState.mode);
+      setTlsSource(tlsState.source === "tailscale" ? "tailscale" : "pem");
+      setTlsDomain(tlsState.domain ?? "");
+      setTlsCommonName(tlsState.commonName ?? "");
+      setTlsNotAfter(tlsState.notAfter ?? "");
+      setTlsHasStoredCert(!!tlsState.certificate);
+      if (tlsState.certificate) setTlsCert(tlsState.certificate);
+      if (tlsState.privateKey) setTlsKey(tlsState.privateKey);
+    });
+  }, [send]);
+
   // Function to update TLS state - accepts a mode parameter
   const updateTlsState = useCallback(
-    (mode: string, cert?: string, key?: string) => {
+    (mode: string, cert?: string, key?: string, source?: "pem" | "tailscale") => {
       const state = { mode } as TLSState;
+      if (source) {
+        state.source = source;
+      }
       if (cert && key) {
         state.certificate = cert;
         state.privateKey = key;
@@ -315,8 +345,11 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
         }
 
         notifications.success("TLS settings updated successfully");
+        // Refresh so the certificate summary reflects the new state.
+        refreshTlsState();
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [send],
   );
 
@@ -799,9 +832,27 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
     setTlsKey(value);
   };
 
+  const handleTlsSourceChange = (value: string) => {
+    setTlsSource(value === "tailscale" ? "tailscale" : "pem");
+  };
+
   // Update the custom TLS settings button click handler
   const handleCustomTlsUpdate = () => {
-    updateTlsState(tlsMode, tlsCert, tlsKey);
+    // Warn before replacing an already-stored certificate/key.
+    if (
+      tlsHasStoredCert &&
+      !window.confirm(
+        $at("A certificate and private key are already stored. Replacing them will overwrite the existing key. Continue?"),
+      )
+    ) {
+      return;
+    }
+    updateTlsState(tlsMode, tlsCert, tlsKey, "pem");
+  };
+
+  // Issue (or renew) the certificate via Tailscale.
+  const handleIssueTailscaleCert = () => {
+    updateTlsState("custom", undefined, undefined, "tailscale");
   };
 
   // Fetch device ID and cloud state on component mount
@@ -818,6 +869,11 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
       } else {
         const tlsState = resp.result as TLSState;
         setTlsMode(tlsState.mode);
+        setTlsSource(tlsState.source === "tailscale" ? "tailscale" : "pem");
+        setTlsDomain(tlsState.domain ?? "");
+        setTlsCommonName(tlsState.commonName ?? "");
+        setTlsNotAfter(tlsState.notAfter ?? "");
+        setTlsHasStoredCert(!!tlsState.certificate);
         if (tlsState.certificate) setTlsCert(tlsState.certificate);
         if (tlsState.privateKey) setTlsKey(tlsState.privateKey);
       }
@@ -1661,46 +1717,106 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
 
               {tlsMode === "custom" && (
                 <div className="mt-4 space-y-4">
-                  <div className="space-y-4">
-                    <SettingsItem
-                      title={$at("TLS Certificate")}
-                      description={$at("Paste your TLS certificate below. For certificate chains, include the entire chain (leaf, intermediate, and root certificates).")}
+                  <SettingsItem
+                    title={$at("Certificate Source")}
+                    description={$at("Choose how the TLS certificate is provided")}
+                  >
+                    <Select
+                      className={isMobile ? "!w-full !h-[36px]" : "!w-[28%] !h-[36px]"}
+                      value={tlsSource}
+                      onChange={e => handleTlsSourceChange(e)}
+                      options={[
+                        { value: "pem", label: "Paste PEM" },
+                        { value: "tailscale", label: "Tailscale" },
+                      ]}
                     />
-                    <div className="space-y-4">
-                      <TextAreaWithLabel
-                        label={$at("Certificate")}
-                        rows={3}
-                        placeholder={
-                          $at("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----")
-                        }
-                        value={tlsCert}
-                        onChange={e => handleTlsCertChange(e.target.value)}
-                      />
-                    </div>
+                  </SettingsItem>
 
-                    <div className="space-y-4">
+                  {tlsSource === "pem" ? (
+                    <>
                       <div className="space-y-4">
-                        <TextAreaWithLabel
-                          label={$at("Private Key")}
-                          description={$at("For security reasons, it will not be displayed after saving.")}
-                          rows={3}
-                          placeholder={
-                            $at("-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----")
-                          }
-                          value={tlsKey}
-                          onChange={e => handleTlsKeyChange(e.target.value)}
+                        <SettingsItem
+                          title={$at("TLS Certificate")}
+                          description={$at("Paste your TLS certificate below. For certificate chains, include the entire chain (leaf, intermediate, and root certificates).")}
+                        />
+                        <div className="space-y-4">
+                          <TextAreaWithLabel
+                            label={$at("Certificate")}
+                            rows={3}
+                            placeholder={
+                              $at("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----")
+                            }
+                            value={tlsCert}
+                            onChange={e => handleTlsCertChange(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="space-y-4">
+                            <TextAreaWithLabel
+                              label={$at("Private Key")}
+                              description={$at("For security reasons, it will not be displayed after saving.")}
+                              rows={3}
+                              placeholder={
+                                $at("-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----")
+                              }
+                              value={tlsKey}
+                              onChange={e => handleTlsKeyChange(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-x-2">
+                        <Button
+                          size="SM"
+                          theme="primary"
+                          text={$at("Update TLS Settings")}
+                          onClick={handleCustomTlsUpdate}
                         />
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-x-2">
-                    <Button
-                      size="SM"
-                      theme="primary"
-                      text={$at("Update TLS Settings")}
-                      onClick={handleCustomTlsUpdate}
-                    />
-                  </div>
+                    </>
+                  ) : (
+                    <>
+                      <SettingsItem
+                        title={$at("Tailscale Certificate")}
+                        description={$at("The certificate is issued for this device's Tailscale domain and renewed automatically. Requires an active Tailscale connection.")}
+                      />
+                      <div className="space-y-2 rounded-md border border-slate-200 p-4 text-sm dark:border-slate-700">
+                        <div>
+                          <span className="font-medium">{$at("Domain")}: </span>
+                          {tlsDomain || (
+                            <span className="text-red-600 dark:text-red-400">
+                              {$at("Tailscale not connected")}
+                            </span>
+                          )}
+                        </div>
+                        {tlsHasStoredCert ? (
+                          <>
+                            <div>
+                              <span className="font-medium">{$at("Common Name")}: </span>
+                              {tlsCommonName || "—"}
+                            </div>
+                            <div>
+                              <span className="font-medium">{$at("Expires")}: </span>
+                              {tlsNotAfter ? new Date(tlsNotAfter).toLocaleString() : "—"}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {$at("No certificate issued yet.")}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-x-2">
+                        <Button
+                          size="SM"
+                          theme="primary"
+                          text={tlsHasStoredCert ? $at("Renew Certificate") : $at("Issue Certificate")}
+                          onClick={handleIssueTailscaleCert}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

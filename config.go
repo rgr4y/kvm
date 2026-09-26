@@ -108,7 +108,8 @@ type Config struct {
 	DisplayMaxBrightness       int                    `json:"display_max_brightness"`
 	DisplayDimAfterSec         int                    `json:"display_dim_after_sec"`
 	DisplayOffAfterSec         int                    `json:"display_off_after_sec"`
-	TLSMode                    string                 `json:"tls_mode"` // options: "self-signed", "user-defined", ""
+	TLSMode                    string                 `json:"tls_mode"`          // options: "self-signed", "user-defined", ""
+	TLSCustomSource            string                 `json:"tls_custom_source"` // when TLSMode=="custom": "pem" (pasted) or "tailscale" (auto-issued)
 	UsbConfig                  *usbgadget.Config      `json:"usb_config"`
 	UsbDevices                 *usbgadget.Devices     `json:"usb_devices"`
 	NetworkConfig              *network.NetworkConfig `json:"network_config"`
@@ -223,6 +224,7 @@ var defaultConfig = &Config{
 	DisplayDimAfterSec:   120,  // 2 minutes
 	DisplayOffAfterSec:   1800, // 30 minutes
 	TLSMode:              "",
+	TLSCustomSource:      "pem",
 	ForceHpd:             false,
 	UsbEnhancedDetection: true,
 	UsbConfig: &usbgadget.Config{
@@ -600,7 +602,7 @@ func writeSystemInfoImg() error {
 		return fmt.Errorf("mount failed: %v", err)
 	}
 
-	if err := run("sh", "-c", "ip addr show | grep inet > " + mountPoint + "/network_info.txt"); err != nil {
+	if err := run("sh", "-c", "ip addr show | grep inet > "+mountPoint+"/network_info.txt"); err != nil {
 		return fmt.Errorf("write network info failed: %v", err)
 	}
 
