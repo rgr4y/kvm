@@ -1851,6 +1851,8 @@ var rpcHandlers = map[string]RPCHandler{
 	"setStreamQualityFactor":    {Func: rpcSetStreamQualityFactor, Params: []string{"factor"}},
 	"getEDID":                   {Func: rpcGetEDID},
 	"setEDID":                   {Func: rpcSetEDID, Params: []string{"edid"}},
+	"getEDIDPresets":            {Func: rpcGetEDIDPresets},
+	"setEDIDPreset":             {Func: rpcSetEDIDPreset, Params: []string{"id"}},
 	"setForceHpd":               {Func: rpcSetForceHpd, Params: []string{"forceHpd"}},
 	"getForceHpd":               {Func: rpcGetForceHpd},
 	"getLocalUpdateStatus":      {Func: rpcGetLocalUpdateStatus},
