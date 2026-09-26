@@ -150,13 +150,87 @@ func parseEDIDCaps(hexStr string) (EDIDCaps, error) {
 	return caps, nil
 }
 
-// rpcGetEDIDPresets returns the preset list with caps parsed from each blob.
+// capsLabel builds a human label from parsed caps: the native mode the EDID
+// forces (detailed timing #1), in "1080p60" shorthand where the width matches a
+// standard height, else the raw "WxH@Hz". Derived from the blob so the label
+// always states what the EDID actually advertises, never a donor monitor's name.
+func capsLabel(caps EDIDCaps) string {
+	if caps.MaxRes == "" {
+		return ""
+	}
+	// Map "WxH" to "Hp" shorthand for the common broadcast/PC heights.
+	short := map[string]string{
+		"1280x720":  "720p",
+		"1920x1080": "1080p",
+		"2560x1440": "1440p",
+		"3840x2160": "2160p",
+	}[caps.MaxRes]
+	if short == "" {
+		// Non-standard height: keep the raw "WxH", no refresh suffix (reads
+		// cleanly and keeps the monitor-name field within its 13-char limit).
+		return caps.MaxRes // e.g. "1920x1200"
+	}
+	if caps.Refresh > 0 {
+		return fmt.Sprintf("%s%d", short, caps.Refresh) // e.g. "1080p60"
+	}
+	return short
+}
+
+// edidNameForCaps is the friendly name shown in the picker and written into the
+// EDID's monitor-name descriptor, so the captured host reports "KVM 1080p60"
+// instead of the donor monitor's model. Empty caps yield a plain "KVM".
+func edidNameForCaps(caps EDIDCaps) string {
+	if lbl := capsLabel(caps); lbl != "" {
+		return "KVM " + lbl
+	}
+	return "KVM"
+}
+
+// setEDIDMonitorName rewrites the base block's Monitor Name descriptor (tag 0xFC)
+// text to name (13-byte field: 0x0A-terminated, 0x20-padded, truncated if longer)
+// and recomputes the base block checksum. If the blob has no 0xFC descriptor it
+// is returned unchanged. The CEA extension block, if any, is untouched.
+func setEDIDMonitorName(hexStr, name string) (string, error) {
+	b, err := hex.DecodeString(strings.TrimSpace(hexStr))
+	if err != nil {
+		return "", err
+	}
+	if len(b) < 128 {
+		return "", fmt.Errorf("edid too short: %d bytes", len(b))
+	}
+
+	// The four 18-byte descriptors start at offset 54 in the base block.
+	for _, off := range []int{54, 72, 90, 108} {
+		if b[off] == 0 && b[off+1] == 0 && b[off+2] == 0 && b[off+3] == 0xFC && b[off+4] == 0 {
+			field := b[off+5 : off+18] // 13-byte text field
+			for i := range field {
+				field[i] = 0x20
+			}
+			n := copy(field, []byte(name))
+			if n < len(field) {
+				field[n] = 0x0A // terminate names shorter than 13 chars
+			}
+			// Recompute base block checksum: all 128 bytes must sum to 0 mod 256.
+			var sum byte
+			for _, x := range b[0:127] {
+				sum += x
+			}
+			b[127] = byte(-int(sum) & 0xFF)
+			return hex.EncodeToString(b), nil
+		}
+	}
+	return hexStr, nil
+}
+
+// rpcGetEDIDPresets returns the preset list with caps parsed from each blob and
+// the label rewritten to match the EDID's real native mode.
 func rpcGetEDIDPresets() ([]EDIDPreset, error) {
 	out := make([]EDIDPreset, 0, len(edidPresets))
 	for _, p := range edidPresets {
 		if p.EDIDHex != "" {
 			if caps, err := parseEDIDCaps(p.EDIDHex); err == nil {
 				p.Caps = caps
+				p.Label = edidNameForCaps(caps)
 			}
 		}
 		out = append(out, p)
@@ -173,8 +247,16 @@ func rpcSetEDIDPreset(id string) error {
 			if p.Disabled || p.EDIDHex == "" {
 				return fmt.Errorf("edid preset %q is not available", id)
 			}
+			// Rewrite the monitor-name descriptor so the captured host reports
+			// "KVM <mode>" instead of the donor monitor's model, then apply.
+			blob := p.EDIDHex
+			if caps, err := parseEDIDCaps(blob); err == nil {
+				if named, err := setEDIDMonitorName(blob, edidNameForCaps(caps)); err == nil {
+					blob = named
+				}
+			}
 			logger.Info().Str("preset", id).Msg("Applying EDID preset")
-			return rpcSetEDID(p.EDIDHex)
+			return rpcSetEDID(blob)
 		}
 	}
 	return fmt.Errorf("unknown edid preset %q", id)

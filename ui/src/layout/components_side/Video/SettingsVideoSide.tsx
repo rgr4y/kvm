@@ -711,9 +711,9 @@ export default function SettingsVideoSide() {
         <SettingsItem
           title="EDID"
           description={$at("Adjust the EDID settings for the display")}
-        >
-          <Select
-            className={isMobile ? "w-full bg-transparent" : "min-w-[200px]"}
+        />
+        <Select
+            className="w-full bg-transparent"
 
             defaultValue={customEdidValue ? "custom" : edid || undefined}
             value={customEdidValue ? "custom" : edid || undefined}
@@ -740,7 +740,6 @@ export default function SettingsVideoSide() {
               { value: "custom", label: "Custom" },
             ]}
           />
-        </SettingsItem>
 
         {customEdidValue !== null && (
           <>
