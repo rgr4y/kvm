@@ -34,6 +34,7 @@ import { DEVICE_API } from "@/ui.config";
 import api from "@/api";
 import Modal from "@components/Modal";
 import { useDeviceUiNavigation } from "@/hooks/useAppNavigation";
+import { useDeviceTitle } from "@/hooks/useDeviceTitle";
 import {
   ConnectionFailedOverlay,
   LoadingConnectionOverlay,
@@ -622,6 +623,9 @@ export default function PCHome() {
 
   const rpcDataChannel = useRTCStore(state => state.rpcDataChannel);
   const [send] = useJsonRpc(onJsonRpcRequest);
+
+  // Tab title reflects the device hostname (falls back to "KVM").
+  useDeviceTitle();
 
   const updateVpnStates = useCallback(() => {
     // TailScaleState

@@ -36,6 +36,7 @@ import { JsonRpcRequest, useJsonRpc, resetHttpSessionId } from "@/hooks/useJsonR
 import api from "@/api";
 import Modal from "@components/Modal";
 import { useDeviceUiNavigation } from "@/hooks/useAppNavigation";
+import { useDeviceTitle } from "@/hooks/useDeviceTitle";
 import {
   ConnectionFailedOverlay,
   LoadingConnectionOverlay,
@@ -615,6 +616,9 @@ export default function MobileHome() {
 
   const rpcDataChannel = useRTCStore(state => state.rpcDataChannel);
   const [send] = useJsonRpc(onJsonRpcRequest);
+
+  // Tab title reflects the device hostname (falls back to "KVM").
+  useDeviceTitle();
 
   const updateVpnStates = useCallback(() => {
     // TailScaleState
