@@ -1852,7 +1852,7 @@ var rpcHandlers = map[string]RPCHandler{
 	"getEDID":                   {Func: rpcGetEDID},
 	"setEDID":                   {Func: rpcSetEDID, Params: []string{"edid"}},
 	"getEDIDPresets":            {Func: rpcGetEDIDPresets},
-	"setEDIDPreset":             {Func: rpcSetEDIDPreset, Params: []string{"id"}},
+	"setEDIDPreset":             {Func: rpcSetEDIDPreset, Params: []string{"id", "audio"}},
 	"setForceHpd":               {Func: rpcSetForceHpd, Params: []string{"forceHpd"}},
 	"getForceHpd":               {Func: rpcGetForceHpd},
 	"getLocalUpdateStatus":      {Func: rpcGetLocalUpdateStatus},

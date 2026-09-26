@@ -2,10 +2,34 @@ package kvm
 
 import (
 	"bytes"
+	"embed"
 	"encoding/hex"
 	"fmt"
 	"strings"
 )
+
+// edidBlobFS holds the generated EDID preset blobs (see tools/edid-gen). Each
+// mode ships in a plain and an "-audio" (LPCM stereo) variant; the variant is
+// chosen at apply time. Blobs are byte-for-byte the output of the vendored
+// builder and are checksum-valid, so kvm_app never assembles EDID at runtime.
+//
+//go:embed edid_blobs/*.bin
+var edidBlobFS embed.FS
+
+// loadEDIDBlob returns the hex-encoded EDID for a mode id, picking the audio
+// variant when requested. Missing blobs are a build error (embed is compile-time),
+// so a lookup miss means an unknown id.
+func loadEDIDBlob(id string, audio bool) (string, error) {
+	name := id
+	if audio {
+		name += "-audio"
+	}
+	b, err := edidBlobFS.ReadFile("edid_blobs/" + name + ".bin")
+	if err != nil {
+		return "", fmt.Errorf("no EDID blob for %q (audio=%v): %w", id, audio, err)
+	}
+	return hex.EncodeToString(b), nil
+}
 
 // EDIDCaps describes what a captured target host will output when handed a given
 // EDID: the mode advertised by detailed timing #1, plus audio/HDR flags parsed
@@ -19,7 +43,7 @@ type EDIDCaps struct {
 }
 
 // EDIDPreset is a capability-labeled EDID the user picks by mode (not by the
-// donor monitor's name). Disabled presets have no verified blob yet.
+// donor monitor's name). Caps are parsed from the blob at request time.
 type EDIDPreset struct {
 	ID       string   `json:"id"`
 	Label    string   `json:"label"`
@@ -29,40 +53,17 @@ type EDIDPreset struct {
 	Note     string   `json:"note,omitempty"`
 }
 
-// Verified, checksum-valid EDID blobs. The 1080p default is the one kvm_app has
-// always shipped; the 1200p blob is a real dump. Both are relabeled here by the
-// mode they force, not by monitor name.
-const (
-	edid1080p60 = "00ffffffffffff0052620188008888881c150103800000780a0dc9a05747982712484c00000001010101010101010101010101010101023a801871382d40582c4500c48e2100001e011d007251d01e206e285500c48e2100001e000000fc00543734392d6648443732300a20000000fd00147801ff1d000a202020202020017b"
-
-	edid1920x1200 = "00FFFFFFFFFFFF00047265058A3F6101101E0104A53420783FC125A8554EA0260D5054BFEF80714F8140818081C081008B009500B300283C80A070B023403020360006442100001A000000FD00304C575716010A202020202020000000FC0042323436574C0A202020202020000000FF0054384E4545303033383532320A01F802031CF14F90020304050607011112131415161F2309070783010000011D8018711C1620582C250006442100009E011D007251D01E206E28550006442100001E8C0AD08A20E02D10103E9600064421000018C344806E70B028401720A80406442100001E00000000000000000000000000000000000000000000000000000096"
-)
-
-// edidPresets is the source of truth for the "pick a mode" picker. Caps are
-// filled in at request time by parsing EDIDHex.
-var edidPresets = []EDIDPreset{
-	{
-		ID:      "1080p60",
-		Label:   "1080p60",
-		EDIDHex: edid1080p60,
-	},
-	{
-		ID:      "1920x1200-60",
-		Label:   "1920x1200 · 60Hz",
-		EDIDHex: edid1920x1200,
-	},
-	{
-		ID:       "720p60",
-		Label:    "720p60",
-		Disabled: true,
-		Note:     "TODO: needs a verified 720p60 EDID blob (kernel edid/1280x720 or edid-decode-verified)",
-	},
-	{
-		ID:       "1080p30",
-		Label:    "1080p30",
-		Disabled: true,
-		Note:     "TODO: needs a verified 1080p30 EDID blob",
-	},
+// edidModeIDs is the source of truth for the "pick a mode" picker, ordered for
+// display. Each id has a plain and an "-audio" blob under edid_blobs/, generated
+// by tools/edid-gen from the vendored VESA/CTA builder. Labels and caps are
+// derived from the blob so they can never disagree with what the EDID advertises.
+var edidModeIDs = []string{
+	"720p60",
+	"1080p60",
+	"1080p30",
+	"1920x1200-60",
+	"1440p60",
+	"2160p30",
 }
 
 // validateEDID checks structural validity: whole 128-byte blocks, the fixed
@@ -222,42 +223,44 @@ func setEDIDMonitorName(hexStr, name string) (string, error) {
 	return hexStr, nil
 }
 
-// rpcGetEDIDPresets returns the preset list with caps parsed from each blob and
-// the label rewritten to match the EDID's real native mode.
+// rpcGetEDIDPresets returns one preset per mode, caps parsed from the (plain)
+// embedded blob and the label set to the mode's friendly "KVM <mode>" name. Every
+// mode also has an audio variant, surfaced via Caps.Audio being available on
+// apply; the picker uses a separate audio toggle rather than doubling the list.
 func rpcGetEDIDPresets() ([]EDIDPreset, error) {
-	out := make([]EDIDPreset, 0, len(edidPresets))
-	for _, p := range edidPresets {
-		if p.EDIDHex != "" {
-			if caps, err := parseEDIDCaps(p.EDIDHex); err == nil {
-				p.Caps = caps
-				p.Label = edidNameForCaps(caps)
-			}
+	out := make([]EDIDPreset, 0, len(edidModeIDs))
+	for _, id := range edidModeIDs {
+		blob, err := loadEDIDBlob(id, false)
+		if err != nil {
+			return nil, err
+		}
+		p := EDIDPreset{ID: id, EDIDHex: blob}
+		if caps, err := parseEDIDCaps(blob); err == nil {
+			p.Caps = caps
+			p.Label = edidNameForCaps(caps)
+		} else {
+			p.Label = id
 		}
 		out = append(out, p)
 	}
 	return out, nil
 }
 
-// rpcSetEDIDPreset applies a preset's EDID by id via the existing set_edid path
-// (so persistence and the native apply are unchanged). Raw-hex custom EDIDs keep
+// rpcSetEDIDPreset applies a mode's EDID by id, picking the audio variant when
+// requested, via the existing set_edid path (persistence and native apply
+// unchanged). The monitor-name descriptor is rewritten to "KVM <mode>" so the
+// captured host reports the mode, not a donor model. Raw-hex custom EDIDs keep
 // using rpcSetEDID.
-func rpcSetEDIDPreset(id string) error {
-	for _, p := range edidPresets {
-		if p.ID == id {
-			if p.Disabled || p.EDIDHex == "" {
-				return fmt.Errorf("edid preset %q is not available", id)
-			}
-			// Rewrite the monitor-name descriptor so the captured host reports
-			// "KVM <mode>" instead of the donor monitor's model, then apply.
-			blob := p.EDIDHex
-			if caps, err := parseEDIDCaps(blob); err == nil {
-				if named, err := setEDIDMonitorName(blob, edidNameForCaps(caps)); err == nil {
-					blob = named
-				}
-			}
-			logger.Info().Str("preset", id).Msg("Applying EDID preset")
-			return rpcSetEDID(blob)
+func rpcSetEDIDPreset(id string, audio bool) error {
+	blob, err := loadEDIDBlob(id, audio)
+	if err != nil {
+		return fmt.Errorf("edid preset %q is not available: %w", id, err)
+	}
+	if caps, err := parseEDIDCaps(blob); err == nil {
+		if named, err := setEDIDMonitorName(blob, edidNameForCaps(caps)); err == nil {
+			blob = named
 		}
 	}
-	return fmt.Errorf("unknown edid preset %q", id)
+	logger.Info().Str("preset", id).Bool("audio", audio).Msg("Applying EDID preset")
+	return rpcSetEDID(blob)
 }

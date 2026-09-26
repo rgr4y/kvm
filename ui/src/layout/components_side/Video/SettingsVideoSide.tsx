@@ -186,6 +186,7 @@ export default function SettingsVideoSide() {
   const [streamEncodecType, setStreamEncodecType] = useState("avc");
   const [customEdidValue, setCustomEdidValue] = useState<string | null>(null);
   const [edid, setEdid] = useState<string | null>(null);
+  const [edidAudio, setEdidAudio] = useState(false);
   const [edidPresets, setEdidPresets] = useState<EdidPreset[]>([]);
   const [videoRcConfig, setVideoRcConfig] = useState<VideoRcConfig>(DEFAULT_VIDEO_RC_CONFIG);
   const [rcSliderValues, setRcSliderValues] = useState<RcSliderState>(
@@ -444,18 +445,30 @@ export default function SettingsVideoSide() {
     });
   };
 
-  // Preset path: apply a capability-labeled mode by id (backend owns the blob).
-  const handleEDIDPresetChange = (id: string) => {
-    send("setEDIDPreset", { id }, resp => {
+  // Preset path: apply a capability-labeled mode by id, with or without HDMI
+  // audio (backend picks the matching blob variant).
+  const handleEDIDPresetChange = (id: string, audio: boolean) => {
+    send("setEDIDPreset", { id, audio }, resp => {
       if ("error" in resp) {
         notifications.error(`Failed to set EDID: ${resp.error.data || "Unknown error"}`);
         return;
       }
 
       const preset = edidPresets.find(p => p.id === id);
-      notifications.success(`EDID set to ${preset?.label ?? id}`);
+      notifications.success(
+        `EDID set to ${preset?.label ?? id}${audio ? " (audio)" : ""}`,
+      );
       setEdid(id);
     });
+  };
+
+  // Toggling HDMI audio re-applies the currently selected preset with the new
+  // audio setting (no effect on a Custom blob).
+  const handleEDIDAudioChange = (audio: boolean) => {
+    setEdidAudio(audio);
+    if (edid && edid !== "custom") {
+      handleEDIDPresetChange(edid, audio);
+    }
   };
 
   return (
@@ -725,7 +738,7 @@ export default function SettingsVideoSide() {
                 setCustomEdidValue("");
               } else {
                 setCustomEdidValue(null);
-                handleEDIDPresetChange(e);
+                handleEDIDPresetChange(e, edidAudio);
               }
             }}
             options={[
@@ -740,6 +753,16 @@ export default function SettingsVideoSide() {
               { value: "custom", label: "Custom" },
             ]}
           />
+
+        {edid && edid !== "custom" && (
+          <Checkbox
+            className="mt-2"
+            checked={edidAudio}
+            onChange={e => handleEDIDAudioChange(e.target.checked)}
+          >
+            {$at("HDMI audio (LPCM stereo)")}
+          </Checkbox>
+        )}
 
         {customEdidValue !== null && (
           <>

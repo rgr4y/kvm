@@ -6,49 +6,74 @@ import (
 	"testing"
 )
 
-// Every enabled preset must carry a structurally valid EDID (correct header +
-// per-block checksum) and parse to a non-empty resolution — a malformed blob
-// would break the captured target's EDID handshake.
+// expectedMode is the resolution/refresh each embedded blob's detailed timing #1
+// must advertise, so a regenerated or swapped blob can't silently drift.
+var expectedMode = map[string]struct {
+	res     string
+	refresh int
+}{
+	"720p60":       {"1280x720", 60},
+	"1080p60":      {"1920x1080", 60},
+	"1080p30":      {"1920x1080", 30},
+	"1920x1200-60": {"1920x1200", 60}, // CVT-RB rounds to 60 (59.95 -> 60)
+	"1440p60":      {"2560x1440", 60},
+	"2160p30":      {"3840x2160", 30},
+}
+
+// Every mode's plain and audio blob must be structurally valid (header +
+// per-block checksum) and advertise its expected native mode — a malformed or
+// mislabeled blob would break the captured target's EDID handshake.
 func TestEDIDPresetsValid(t *testing.T) {
-	for _, p := range edidPresets {
-		if p.Disabled || p.EDIDHex == "" {
+	for _, id := range edidModeIDs {
+		want, ok := expectedMode[id]
+		if !ok {
+			t.Errorf("mode %q has no expected-mode entry", id)
 			continue
 		}
-		if err := validateEDID(p.EDIDHex); err != nil {
-			t.Errorf("preset %q: invalid EDID: %v", p.ID, err)
-		}
-		caps, err := parseEDIDCaps(p.EDIDHex)
-		if err != nil {
-			t.Errorf("preset %q: parse caps: %v", p.ID, err)
-			continue
-		}
-		if caps.MaxRes == "" || caps.Refresh == 0 {
-			t.Errorf("preset %q: no resolution/refresh parsed (%+v)", p.ID, caps)
+		for _, audio := range []bool{false, true} {
+			blob, err := loadEDIDBlob(id, audio)
+			if err != nil {
+				t.Errorf("mode %q (audio=%v): load: %v", id, audio, err)
+				continue
+			}
+			if err := validateEDID(blob); err != nil {
+				t.Errorf("mode %q (audio=%v): invalid EDID: %v", id, audio, err)
+				continue
+			}
+			caps, err := parseEDIDCaps(blob)
+			if err != nil {
+				t.Errorf("mode %q (audio=%v): parse caps: %v", id, audio, err)
+				continue
+			}
+			if caps.MaxRes != want.res {
+				t.Errorf("mode %q: resolution = %q, want %q", id, caps.MaxRes, want.res)
+			}
+			if caps.Refresh != want.refresh {
+				t.Errorf("mode %q: refresh = %d, want %d", id, caps.Refresh, want.refresh)
+			}
+			if caps.Audio != audio {
+				t.Errorf("mode %q (audio=%v): Caps.Audio = %v, want %v", id, audio, caps.Audio, audio)
+			}
 		}
 	}
 }
 
-// Disabled presets must not carry a blob (they are placeholders for modes with no
-// verified EDID yet).
-func TestEDIDDisabledHaveNoBlob(t *testing.T) {
-	for _, p := range edidPresets {
-		if p.Disabled && p.EDIDHex != "" {
-			t.Errorf("preset %q is disabled but carries a blob", p.ID)
-		}
-	}
-}
-
-// The shipped 1080p60 preset must parse to exactly 1920x1080 @ ~60Hz.
-func TestEDID1080pParse(t *testing.T) {
-	caps, err := parseEDIDCaps(edid1080p60)
+// rpcGetEDIDPresets must return one labeled preset per mode with a parseable blob.
+func TestGetEDIDPresets(t *testing.T) {
+	presets, err := rpcGetEDIDPresets()
 	if err != nil {
-		t.Fatalf("parse: %v", err)
+		t.Fatalf("rpcGetEDIDPresets: %v", err)
 	}
-	if caps.MaxRes != "1920x1080" {
-		t.Errorf("1080p60 resolution = %q, want 1920x1080", caps.MaxRes)
+	if len(presets) != len(edidModeIDs) {
+		t.Fatalf("got %d presets, want %d", len(presets), len(edidModeIDs))
 	}
-	if caps.Refresh < 59 || caps.Refresh > 61 {
-		t.Errorf("1080p60 refresh = %d, want ~60", caps.Refresh)
+	for _, p := range presets {
+		if p.EDIDHex == "" {
+			t.Errorf("preset %q has no blob", p.ID)
+		}
+		if p.Label == "" {
+			t.Errorf("preset %q has no label", p.ID)
+		}
 	}
 }
 
@@ -70,8 +95,11 @@ func TestEDIDNameForCaps(t *testing.T) {
 }
 
 func TestSetEDIDMonitorName(t *testing.T) {
-	// The stock 1080p blob ships with donor name "T749-fHD720".
-	out, err := setEDIDMonitorName(edid1080p60, "KVM 1080p60")
+	blob, err := loadEDIDBlob("1080p60", false)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	out, err := setEDIDMonitorName(blob, "KVM custom")
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
@@ -83,11 +111,7 @@ func TestSetEDIDMonitorName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	// The 0xFC descriptor text must now read the new name, and not the donor's.
-	if !bytes.Contains(b, []byte("KVM 1080p60")) {
-		t.Error("renamed blob missing 'KVM 1080p60'")
-	}
-	if bytes.Contains(b, []byte("T749")) {
-		t.Error("renamed blob still carries donor name 'T749'")
+	if !bytes.Contains(b, []byte("KVM custom")) {
+		t.Error("renamed blob missing 'KVM custom'")
 	}
 }
