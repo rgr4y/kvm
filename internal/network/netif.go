@@ -444,7 +444,7 @@ func (s *NetworkInterfaceState) clearDefaultIPv4Route() error {
     if err != nil {
         return err
     }
-    routes, err := netlink.RouteList(iface, netlink.FAMILY_V4)
+	routes, err := routeListIPv4(iface)
     if err != nil {
         return err
     }

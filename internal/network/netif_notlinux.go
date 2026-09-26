@@ -19,3 +19,7 @@ func (s *NetworkInterfaceState) Run() error {
 func netlinkAddrs(iface netlink.Link) ([]netlink.Addr, error) {
 	return nil, fmt.Errorf("not implemented")
 }
+
+func routeListIPv4(netlink.Link) ([]netlink.Route, error) {
+	return nil, fmt.Errorf("not implemented")
+}

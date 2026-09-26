@@ -1,3 +1,5 @@
+//go:build linux
+
 package udhcpc
 
 func (u *DHCPClient) GetNtpServers() []string {
