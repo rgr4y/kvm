@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": "22.15.0"
+    "node": ">=22.15.0"
   },
   "scripts": {
-    "dev": "dev_device.bat 192.168.0.105",
+    "dev": "./dev_device.sh 10.0.1.88",
     "dev:ssl": "USE_SSL=true ./dev_device.sh",
     "dev:cloud": "vite dev --mode=cloud-development",
     "build": "npm run build:prod",
@@ -94,5 +94,11 @@
     "vite": "^6.3.5",
     "vite-plugin-svgr": "^4.5.0",
     "vite-tsconfig-paths": "^5.1.4"
+  },
+  "allowScripts": {
+    "@swc/core@1.11.24": true,
+    "@tailwindcss/oxide@4.1.7": true,
+    "esbuild@0.25.4": true,
+    "tesseract.js@7.0.0": true
   }
 }

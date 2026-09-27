@@ -6,7 +6,7 @@ import ZhongDuanSvg from "@assets/second/zhongduan.svg?react";
 import ZhongDuanSvg2 from "@assets/second/zhongduan2.svg?react";
 import { useReactAt } from "i18n-auto-extractor/react";
 import OpenSvg from "@assets/second/open.svg?react"
-import CopeSvg from "@assets/second/copy.svg?react"
+import VideoSVG from "@assets/second/vedio.svg?react";
 import { Button as AntdButton } from "antd";
 
 import {
@@ -17,9 +17,10 @@ import {
 import Container from "@components/Container";
 import { cx } from "@/cva.config";
 import { useJsonRpc } from "@/hooks/useJsonRpc";
+import { useVideoFps } from "@/hooks/useVideoFps";
 import LogoLuckfox from "@assets/logo-luckfox.png";
 import MacroTopBar from "@/layout/components_side/Macros/MacroTopBar";
-import { dark_bg2_style } from "@/layout/theme_color";
+import { dark_bg2_style, selected_bt_bg } from "@/layout/theme_color";
 import { useTheme } from "@/layout/contexts/ThemeContext";
 
 import SettingsModal from "../../components_setting";
@@ -36,11 +37,13 @@ export default function TopBarPC({
   const setVirtualKeyboard = useHidStore(state => state.setVirtualKeyboardEnabled);
   const toggleSidebarView = useUiStore(state => state.toggleSidebarView);
   const setDisableFocusTrap = useUiStore(state => state.setDisableVideoFocusTrap);
+  const sidebarView = useUiStore(state => state.sidebarView);
   const terminalType = useUiStore(state => state.terminalType);
   const setTerminalType = useUiStore(state => state.setTerminalType);
   // Audio related
   const [send] = useJsonRpc();
   const setAudioMode = useAudioModeStore(state => state.setAudioMode);
+  const { label: videoButtonLabel } = useVideoFps();
   const { $at } = useReactAt();
 
   useEffect(() => {
@@ -100,14 +103,14 @@ export default function TopBarPC({
             </Popover>
             <AntdButton
               type={"text"}
-              icon={<CopeSvg/>}
-              className={"!rounded-none"}
+              icon={<VideoSVG/>}
+              className={cx("!rounded-none", sidebarView === "SettingsVideo" ? selected_bt_bg : "")}
               onClick={() => {
                 setDisableFocusTrap(true);
-                toggleSidebarView("Clipboard");
+                toggleSidebarView("SettingsVideo");
               }}
             >
-              {$at("Clipboard")}
+              {$at("Video")} {videoButtonLabel}
             </AntdButton>
 
             <AntdButton

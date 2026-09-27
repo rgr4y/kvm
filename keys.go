@@ -6,15 +6,12 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -234,12 +231,5 @@ func resetConfigFileAndReboot() {
 		keysLogger.Warn().Str("path", configPath).Msg("config file deleted")
 	}
 
-	unix.Sync()
-	time.Sleep(200 * time.Millisecond)
-
-	if err := unix.Reboot(unix.LINUX_REBOOT_CMD_RESTART); err != nil {
-		keysLogger.Error().Err(err).Msg("syscall reboot failed, trying /sbin/reboot")
-		_ = exec.Command("/sbin/reboot", "-f").Run()
-		_ = exec.Command("reboot", "-f").Run()
-	}
+	rebootSystem()
 }

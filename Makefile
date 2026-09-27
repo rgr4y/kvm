@@ -27,6 +27,8 @@ BRANCH    ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILDDATE ?= $(shell date -u +%FT%T%z)
 BUILDTS   ?= $(shell date -u +%s)
 REVISION  ?= $(shell git rev-parse HEAD)
+VERSION_DEV ?= 0.1.4-dev
+VERSION ?= 0.1.4
 
 PROMETHEUS_TAG := github.com/prometheus/common/version
 KVM_PKG_NAME   := kvm
@@ -87,7 +89,13 @@ deploy: build_dev
 		exit 1; \
 	fi
 	@echo "Stopping kvm_app on device..."
-	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; sleep 1'
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'kill -TERM $$(pidof kvm_app) 2>/dev/null; \
+	  for i in 1 2 3 4 5 6 7 8 9 10; do \
+	    pidof kvm_app >/dev/null 2>&1 || break; \
+	    sleep 0.3; \
+	  done; \
+	  pidof kvm_app >/dev/null 2>&1 && kill -KILL $$(pidof kvm_app) 2>/dev/null; \
+	  true'
 	@echo "Deploying to $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)..."
 	scp $(BIN_DIR)/kvm_app $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)
 	@echo "Starting kvm_app on device..."
@@ -102,7 +110,13 @@ deploy_only:
 		exit 1; \
 	fi
 	@echo "Stopping kvm_app on device..."
-	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'killall kvm_app 2>/dev/null; sleep 1'
+	ssh $(DEVICE_USER)@$(DEVICE_HOST) 'kill -TERM $$(pidof kvm_app) 2>/dev/null; \
+	  for i in 1 2 3 4 5 6 7 8 9 10; do \
+	    pidof kvm_app >/dev/null 2>&1 || break; \
+	    sleep 0.3; \
+	  done; \
+	  pidof kvm_app >/dev/null 2>&1 && kill -KILL $$(pidof kvm_app) 2>/dev/null; \
+	  true'
 	@echo "Deploying to $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)..."
 	scp $(BIN_DIR)/kvm_app $(DEVICE_USER)@$(DEVICE_HOST):$(DEVICE_PATH)
 	@echo "Starting kvm_app on device..."

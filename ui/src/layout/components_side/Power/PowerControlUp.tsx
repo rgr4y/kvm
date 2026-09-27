@@ -153,7 +153,7 @@ const PowerControlUp: React.FC = () => {
                 alignItems: "center",
                 gap: "8px"
               }}>
-                <GoDotFill className={powerLed ? "text-green-500" : "text-gray-400"} />
+                <GoDotFill size="2em" className={powerLed ? "text-green-500" : "text-gray-400"} />
                 <span className={dark_font_style}>{$at("Power LED")}</span>
               </div>
               <div style={{
@@ -163,7 +163,7 @@ const PowerControlUp: React.FC = () => {
                 alignItems: "center",
                 gap: "8px"
               }}>
-                <GoDotFill className={hddLed ? "text-green-500" : "text-gray-400"} />
+                <GoDotFill size="2em" className={hddLed ? "text-green-500" : "text-gray-400"} />
                 <span className={dark_font_style}>{$at("HDD LED")}</span>
               </div>
             </div>

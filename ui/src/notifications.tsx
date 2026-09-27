@@ -1,6 +1,6 @@
 import toast, { Toast, Toaster, useToasterStore } from "react-hot-toast";
 import React, { useEffect } from "react";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/20/solid";
+import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon } from "@heroicons/react/20/solid";
 
 import Card from "@components/Card";
 
@@ -31,6 +31,41 @@ const ToastContent = ({
   </Card>
 );
 
+const ActionToastContent = ({
+  icon,
+  message,
+  actionLabel,
+  onAction,
+  t,
+}: {
+  icon: React.ReactNode;
+  message: string;
+  actionLabel: string;
+  onAction: () => void;
+  t: Toast;
+}) => (
+  <Card
+    className={`${
+      t.visible ? "animate-enter" : "animate-leave"
+    } pointer-events-auto z-[9999] w-full max-w-sm shadow-xl! bg-white dark:bg-[rgb(26,26,26)] backdrop-blur-sm`}
+  >
+    <div className="flex items-center gap-x-2 p-2.5 px-2">
+      {icon}
+      <p className="flex-1 text-[14px] font-medium text-gray-900 dark:text-gray-100">{message}</p>
+      <button
+        type="button"
+        className="shrink-0 rounded-md bg-blue-600 px-2.5 py-1 text-[13px] font-medium text-white hover:bg-blue-700"
+        onClick={() => {
+          onAction();
+          toast.dismiss(t.id);
+        }}
+      >
+        {actionLabel}
+      </button>
+    </div>
+  </Card>
+);
+
 const notifications = {
   success: (message: string, options?: NotificationOptions) => {
     return toast.custom(
@@ -55,6 +90,26 @@ const notifications = {
         />
       ),
       { duration: 2000, ...options },
+    );
+  },
+
+  action: (
+    message: string,
+    actionLabel: string,
+    onAction: () => void,
+    options?: NotificationOptions,
+  ) => {
+    return toast.custom(
+      t => (
+        <ActionToastContent
+          icon={<ExclamationCircleIcon className="w-5 h-5 text-amber-500 dark:text-amber-400" />}
+          message={message}
+          actionLabel={actionLabel}
+          onAction={onAction}
+          t={t}
+        />
+      ),
+      { duration: 6000, ...options },
     );
   },
 };
@@ -84,4 +139,5 @@ export function Notifications({
 export default Object.assign(Notifications, {
   success: notifications.success,
   error: notifications.error,
+  action: notifications.action,
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReactAt } from "i18n-auto-extractor/react";
 import { motion } from "framer-motion";
+import { isMobile } from "react-device-detect";
 
 import { useSettingsStore, useUiStore, useVideoStore } from "@/hooks/stores";
 import Card from "@components/Card";
@@ -17,6 +18,9 @@ interface Rect {
 }
 
 type OcrStatus = "idle" | "selecting" | "processing" | "result";
+
+const NUDGE_THRESHOLD = 3;
+const NUDGE_WINDOW_MS = 15000;
 
 type TesseractWorker = {
   recognize: (image: HTMLCanvasElement, options?: unknown, output?: unknown) => Promise<{
@@ -156,6 +160,8 @@ export default function OcrOverlay({ videoRef, containerRef }: OcrOverlayProps) 
   const { width: videoWidth, height: videoHeight } = useVideoStore();
   const isOcrMode = useUiStore(state => state.isOcrMode);
   const setOcrMode = useUiStore(state => state.setOcrMode);
+  const setSidebarView = useUiStore(state => state.setSidebarView);
+  const toggleTopBarView = useUiStore(state => state.toggleTopBarView);
   const setDisableVideoFocusTrap = useUiStore(state => state.setDisableVideoFocusTrap);
   const ocrShortcutEnabled = useSettingsStore(state => state.ocrShortcutEnabled);
   const ocrShortcut = useSettingsStore(state => state.ocrShortcut);
@@ -163,6 +169,7 @@ export default function OcrOverlay({ videoRef, containerRef }: OcrOverlayProps) 
 
   const mountedRef = useRef(true);
   const resultRef = useRef<HTMLTextAreaElement>(null);
+  const shortcutTimestampsRef = useRef<number[]>([]);
   const [status, setStatus] = useState<OcrStatus>("idle");
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<Rect | null>(null);
@@ -174,6 +181,14 @@ export default function OcrOverlay({ videoRef, containerRef }: OcrOverlayProps) 
       mountedRef.current = false;
     };
   }, []);
+
+  const openClipboardSettings = useCallback(() => {
+    if (isMobile) {
+      toggleTopBarView("ClipboardMobile");
+    } else {
+      setSidebarView("Clipboard");
+    }
+  }, [setSidebarView, toggleTopBarView]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -189,11 +204,27 @@ export default function OcrOverlay({ videoRef, containerRef }: OcrOverlayProps) 
       if (videoWidth === 0 || videoHeight === 0) return;
       e.preventDefault();
       e.stopPropagation();
+
+      const now = Date.now();
+      const recent = shortcutTimestampsRef.current
+        .filter(ts => now - ts < NUDGE_WINDOW_MS);
+      recent.push(now);
+      if (recent.length >= NUDGE_THRESHOLD) {
+        shortcutTimestampsRef.current = [];
+        notifications.action(
+          `${ocrShortcut} ${$at("opens OCR, not the remote host. Rebind or disable it.")}`,
+          $at("Clipboard settings"),
+          openClipboardSettings,
+        );
+      } else {
+        shortcutTimestampsRef.current = recent;
+      }
+
       setOcrMode(!isOcrMode);
     };
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [isOcrMode, ocrShortcut, ocrShortcutEnabled, setOcrMode, videoWidth, videoHeight]);
+  }, [isOcrMode, ocrShortcut, ocrShortcutEnabled, setOcrMode, videoWidth, videoHeight, openClipboardSettings, $at]);
 
   const closeOverlay = useCallback(() => {
     if (status === "processing" || status === "result") {

@@ -56,3 +56,7 @@ func (s *NetworkInterfaceState) Run() error {
 func netlinkAddrs(iface netlink.Link) ([]netlink.Addr, error) {
 	return netlink.AddrList(iface, nl.FAMILY_ALL)
 }
+
+func routeListIPv4(iface netlink.Link) ([]netlink.Route, error) {
+	return netlink.RouteList(iface, netlink.FAMILY_V4)
+}

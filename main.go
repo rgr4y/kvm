@@ -17,6 +17,7 @@ var appCtx context.Context
 func Main() {
 	SyncConfigSD(true)
 	LoadConfig()
+	cleanupStaleLocalPackageOnStartup()
 
 	// Restore persisted stream quality (default 0.5 = Medium)
 	if config.StreamQualityFactor > 0 {
@@ -190,8 +191,8 @@ func Main() {
 		initJiggler()
 
 		initSystemInfo()
+		initAutoMountImage()
 	}
-
 	// initialize GPIO
 	initGPIO()
 
@@ -201,28 +202,6 @@ func Main() {
 	// Initialize VPN
 	initVPN()
 
-	//Auto update
-	//go func() {
-	//	time.Sleep(15 * time.Minute)
-	//	for {
-	//		logger.Debug().Bool("auto_update_enabled", config.AutoUpdateEnabled).Msg("UPDATING")
-	//		if !config.AutoUpdateEnabled {
-	//			return
-	//		}
-	//		if currentSession != nil {
-	//			logger.Debug().Msg("skipping update since a session is active")
-	//			time.Sleep(1 * time.Minute)
-	//			continue
-	//		}
-	//		includePreRelease := config.IncludePreRelease
-	//		err = TryUpdate(context.Background(), GetDeviceID(), includePreRelease)
-	//		if err != nil {
-	//			logger.Warn().Err(err).Msg("failed to auto update")
-	//		}
-	//		time.Sleep(1 * time.Hour)
-	//	}
-	//}()
-	//go RunFuseServer()
 	go RunWebServer()
 
 	// API and MCP services temporarily disabled for debugging
@@ -245,6 +224,10 @@ func Main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs
 	logger.Info().Msg("KVM Shutting Down")
+	// Cancel appCtx so runWatchdog disarms /dev/watchdog with 'V'.
+	// Without this, the kernel watchdog reboots ~10s after main exits.
+	cancel()
+	time.Sleep(500 * time.Millisecond)
 	//if fuseServer != nil {
 	//	err := setMassStorageImage(" ")
 	//	if err != nil {

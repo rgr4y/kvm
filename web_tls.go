@@ -3,11 +3,13 @@ package kvm
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"kvm/internal/websecure"
 )
@@ -31,6 +33,13 @@ type TLSState struct {
 	Mode        string `json:"mode"`
 	Certificate string `json:"certificate"`
 	PrivateKey  string `json:"privateKey"`
+	// Source applies when Mode=="custom": "pem" (pasted) or "tailscale" (auto-issued).
+	Source string `json:"source,omitempty"`
+	// Domain is read-only: the MagicDNS name used when Source=="tailscale".
+	Domain string `json:"domain,omitempty"`
+	// CommonName and NotAfter are read-only summary fields of the stored custom cert.
+	CommonName string `json:"commonName,omitempty"`
+	NotAfter   string `json:"notAfter,omitempty"` // RFC3339
 }
 
 func initCertStore() {
@@ -73,6 +82,16 @@ func getTLSState() TLSState {
 		s.Mode = "disabled"
 	case "custom":
 		s.Mode = "custom"
+		s.Source = config.TLSCustomSource
+		if s.Source == "" {
+			s.Source = tlsCustomSourcePEM
+		}
+		if s.Source == tlsCustomSourceTailscale {
+			// best-effort; empty when tailscale is down
+			if dnsName, err := tailscaleSelfDNSName(); err == nil {
+				s.Domain = dnsName
+			}
+		}
 		cert := certStore.GetCertificate(webSecureCustomCertificateName)
 		if cert != nil {
 			var certPEM []byte
@@ -86,6 +105,14 @@ func getTLSState() TLSState {
 				certPEM = append(certPEM, pem.EncodeToMemory(&block)...)
 			}
 			s.Certificate = string(certPEM)
+
+			// Parse leaf for the summary fields (CN + expiration).
+			if len(cert.Certificate) > 0 {
+				if leaf, err := x509.ParseCertificate(cert.Certificate[0]); err == nil {
+					s.CommonName = leaf.Subject.CommonName
+					s.NotAfter = leaf.NotAfter.UTC().Format(time.RFC3339)
+				}
+			}
 		}
 	case "self-signed":
 		s.Mode = "self-signed"
@@ -109,11 +136,23 @@ func setTLSState(s TLSState) error {
 		if config.TLSMode == "" {
 			isChanged = true
 		}
-		// parse pem to cert and key
-		err, _ := certStore.ValidateAndSaveCertificate(webSecureCustomCertificateName, s.Certificate, s.PrivateKey, true)
-		// warn doesn't matter as ... we don't know the hostname yet
-		if err != nil {
-			return fmt.Errorf("failed to save certificate: %w", err)
+		switch s.Source {
+		case tlsCustomSourceTailscale:
+			// Issue via tailscale CLI and store under the custom cert.
+			// Gates on an active tailscale connection.
+			if err := issueTailscaleCert(); err != nil {
+				return fmt.Errorf("failed to issue tailscale certificate: %w", err)
+			}
+			config.TLSCustomSource = tlsCustomSourceTailscale
+			startTailscaleCertRenewal()
+		default:
+			// parse pem to cert and key
+			err, _ := certStore.ValidateAndSaveCertificate(webSecureCustomCertificateName, s.Certificate, s.PrivateKey, true)
+			// warn doesn't matter as ... we don't know the hostname yet
+			if err != nil {
+				return fmt.Errorf("failed to save certificate: %w", err)
+			}
+			config.TLSCustomSource = tlsCustomSourcePEM
 		}
 		config.TLSMode = "custom"
 	case "self-signed":
@@ -128,6 +167,10 @@ func setTLSState(s TLSState) error {
 	if !isChanged {
 		websecureLogger.Info().Msg("TLS enabled state is not changed, not starting/stopping websecure server")
 		return nil
+	}
+
+	if err := SaveConfig(); err != nil {
+		return fmt.Errorf("failed to save TLS config: %w", err)
 	}
 
 	if config.TLSMode == "" {
@@ -204,11 +247,17 @@ func startWebSecureServer() {
 }
 
 func RunWebSecureServer() {
+	// Initialize cert store eagerly so setTLSState can be called
+	// via JSON-RPC even when TLS server has not started yet.
+	initCertStore()
+
+	// Resume tailscale cert auto-renewal across reboots.
+	if config.TLSMode == "custom" && config.TLSCustomSource == tlsCustomSourceTailscale {
+		startTailscaleCertRenewal()
+	}
+
 	for range startTLS {
 		websecureLogger.Info().Msg("Starting websecure server, as we have received a start signal")
-		if certStore == nil {
-			initCertStore()
-		}
 		go runWebSecureServer()
 	}
 }
