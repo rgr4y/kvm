@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import KeyboardSVG from "@assets/second/keyboard.svg?react";
 import Keyboard2SVG from "@assets/second/keyboard2.svg?react";
 import MouseSVG from "@assets/second/mouse.svg?react";
-import VideoSVG from "@assets/second/vedio.svg?react";
+import CopeSvg from "@assets/second/copy.svg?react";
 import MediaSVG from "@assets/second/media.svg?react";
 import HdmlSVG from "@assets/second/hdml.svg?react";
 import Hdml2SVG from "@assets/second/hdml2.svg?react";
@@ -12,7 +12,6 @@ import SwichDirSvg from "@assets/second/swich_dri1.svg?react";
 import SwichDirSvg2 from "@assets/second/swich_dir2.svg?react";
 import { useReactAt } from "i18n-auto-extractor/react";
 import { Button as AntdButton, Typography } from "antd";
-import { useInterval } from "usehooks-ts";
 import StateSvg from "@assets/second/state.svg?react";
 
 import {
@@ -69,32 +68,6 @@ export default function BottomBarPC() {
 
   const [hostname, setHostname] = useState("");
   const [send] = useJsonRpc();
-  const peerConnection = useRTCStore(state => state.peerConnection);
-  const mediaStream = useRTCStore(state => state.mediaStream);
-  const [fps, setFps] = useState(0);
-  useInterval(function collectWebRTCStats() {
-    (async () => {
-      if (forceHttp) return;
-      if (!mediaStream) return;
-      const videoTrack = mediaStream.getVideoTracks()[0];
-      if (!videoTrack) return;
-      const stats = await peerConnection?.getStats();
-
-
-      stats?.forEach(report => {
-        if (report.type === "inbound-rtp") {
-          setFps(report.framesPerSecond);
-        }
-      });
-    })();
-  }, 500);
-
-  const videoButtonLabel = useMemo(() => {
-    if (forceHttp) {
-      return "N/A fps";
-    }
-    return `${Math.round(fps || 0)}fps`;
-  }, [forceHttp, fps]);
   useEffect(() => {
     send("getNetworkSettings", {}, resp => {
       if ("error" in resp) return;
@@ -245,17 +218,17 @@ export default function BottomBarPC() {
           <div style={{ width: "1px", height: "100%" }}
                className={"bg-[rgba(229,229,229,1)] dark:bg-[rgba(56,56,56,1)]"} />
           <AntdButton
-            icon={<VideoSVG fontSize={16} />}
+            icon={<CopeSvg fontSize={16} />}
             type={"text"}
             size={"small"}
             onClick={() => {
               setDisableFocusTrap(true);
-              toggleSidebarView("SettingsVideo");
+              toggleSidebarView("Clipboard");
             }}
             style={{height:"24px",borderRadius:0, fontSize: "12px", color: "inherit"}}
-            className={sidebarView === "SettingsVideo" ? selected_bt_bg : ""}
+            className={sidebarView === "Clipboard" ? selected_bt_bg : ""}
           >
-            {videoButtonLabel}
+            {$at("Clipboard")}
           </AntdButton>
           <div style={{ width: "1px", height: "100%" }}
                className={"bg-[rgba(229,229,229,1)] dark:bg-[rgba(56,56,56,1)]"} />
