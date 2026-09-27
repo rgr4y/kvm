@@ -601,7 +601,7 @@
   "53e61336bb": "results",
   "d1f5a81904": "Unmount MicroSD Card",
   "5874cf46ff": "SD card formatted successfully",
-  "7dc25305d4": "Encodec Type",
+  "7dc25305d4": "Encoder Type",
   "41d263a988": "Stream Quality",
   "d8d7a5377b": "RC Control",
   "a09ff5b350": "Adjust rate control QP settings for better balance between quality and bitrate",
