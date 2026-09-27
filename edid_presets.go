@@ -2,10 +2,29 @@ package kvm
 
 import (
 	"bytes"
+	"embed"
 	"encoding/hex"
 	"fmt"
 	"strings"
 )
+
+// Generated, checksum-valid EDID blobs — one per resolution mode, with a matching
+// no-audio variant. All carry a "KVM <mode>" monitor-name descriptor, so a
+// captured host never sees a donor monitor's model. Kept as files (not inline
+// hex) for provenance; the no-audio variants are shipped for a future toggle.
+//
+//go:embed edid_blobs/*.bin
+var edidBlobFS embed.FS
+
+// mustEDIDHex loads a shipped blob and returns it as a hex string. Panics at init
+// if the asset is missing — these are build-time assets, not runtime input.
+func mustEDIDHex(name string) string {
+	b, err := edidBlobFS.ReadFile("edid_blobs/" + name)
+	if err != nil {
+		panic(fmt.Sprintf("edid blob %q: %v", name, err))
+	}
+	return hex.EncodeToString(b)
+}
 
 // EDIDCaps describes what a captured target host will output when handed a given
 // EDID: the mode advertised by detailed timing #1, plus audio/HDR flags parsed
@@ -19,7 +38,7 @@ type EDIDCaps struct {
 }
 
 // EDIDPreset is a capability-labeled EDID the user picks by mode (not by the
-// donor monitor's name). Disabled presets have no verified blob yet.
+// donor monitor's name). The Label is derived from parsed caps at request time.
 type EDIDPreset struct {
 	ID       string   `json:"id"`
 	Label    string   `json:"label"`
@@ -29,40 +48,20 @@ type EDIDPreset struct {
 	Note     string   `json:"note,omitempty"`
 }
 
-// Verified, checksum-valid EDID blobs. The 1080p default is the one kvm_app has
-// always shipped; the 1200p blob is a real dump. Both are relabeled here by the
-// mode they force, not by monitor name.
-const (
-	edid1080p60 = "00ffffffffffff0052620188008888881c150103800000780a0dc9a05747982712484c00000001010101010101010101010101010101023a801871382d40582c4500c48e2100001e011d007251d01e206e285500c48e2100001e000000fc00543734392d6648443732300a20000000fd00147801ff1d000a202020202020017b"
-
-	edid1920x1200 = "00FFFFFFFFFFFF00047265058A3F6101101E0104A53420783FC125A8554EA0260D5054BFEF80714F8140818081C081008B009500B300283C80A070B023403020360006442100001A000000FD00304C575716010A202020202020000000FC0042323436574C0A202020202020000000FF0054384E4545303033383532320A01F802031CF14F90020304050607011112131415161F2309070783010000011D8018711C1620582C250006442100009E011D007251D01E206E28550006442100001E8C0AD08A20E02D10103E9600064421000018C344806E70B028401720A80406442100001E00000000000000000000000000000000000000000000000000000096"
-)
-
-// edidPresets is the source of truth for the "pick a mode" picker. Caps are
-// filled in at request time by parsing EDIDHex.
+// edidPresets is the source of truth for the resolution picker — one entry per
+// mode, ascending. Audio-enabled variants are used so a captured host gets audio
+// over HDMI by default; the no-audio blobs ship alongside for a future toggle.
+// Labels are filled in from parsed caps at request time.
 var edidPresets = []EDIDPreset{
-	{
-		ID:      "1080p60",
-		Label:   "1080p60",
-		EDIDHex: edid1080p60,
-	},
-	{
-		ID:      "1920x1200-60",
-		Label:   "1920x1200 · 60Hz",
-		EDIDHex: edid1920x1200,
-	},
-	{
-		ID:       "720p60",
-		Label:    "720p60",
-		Disabled: true,
-		Note:     "TODO: needs a verified 720p60 EDID blob (kernel edid/1280x720 or edid-decode-verified)",
-	},
-	{
-		ID:       "1080p30",
-		Label:    "1080p30",
-		Disabled: true,
-		Note:     "TODO: needs a verified 1080p30 EDID blob",
-	},
+	{ID: "720p60", EDIDHex: mustEDIDHex("720p60-audio.bin")},
+	{ID: "1080p30", EDIDHex: mustEDIDHex("1080p30-audio.bin")},
+	{ID: "1080p60", EDIDHex: mustEDIDHex("1080p60-audio.bin")},
+	{ID: "1920x1200-60", EDIDHex: mustEDIDHex("1920x1200-60-audio.bin")},
+	// 1440p60 (~241MHz) and 2160p30 (~297MHz) exceed the HDMI-RX bridge's
+	// pixel-clock ceiling (~165MHz), so the host outputs a mode the capture path
+	// can't ingest → no video. Blobs stay shipped; re-enable per verified limits.
+	// {ID: "1440p60", EDIDHex: mustEDIDHex("1440p60-audio.bin")},
+	// {ID: "2160p30", EDIDHex: mustEDIDHex("2160p30-audio.bin")},
 }
 
 // validateEDID checks structural validity: whole 128-byte blocks, the fixed

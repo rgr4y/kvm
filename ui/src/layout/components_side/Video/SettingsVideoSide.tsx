@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Button as AntdButton , Slider , Checkbox, Select, Modal, InputNumber, Tabs, Typography } from "antd";
+import { Button as AntdButton , Slider , Checkbox, Select, Modal, InputNumber, Tabs, Typography, Collapse } from "antd";
 import { useReactAt } from "i18n-auto-extractor/react";
 import { isMobile } from "react-device-detect";
 
@@ -378,8 +378,10 @@ export default function SettingsVideoSide() {
           setEdid(match.id);
           setCustomEdidValue(null);
         } else {
-          setEdid("custom");
-          setCustomEdidValue(receivedEdid);
+          // Never surface raw EDID on load — the dropdown just shows no selection.
+          // The hex editor appears only when the user explicitly picks "Custom".
+          setEdid(null);
+          setCustomEdidValue(null);
         }
       });
     });
@@ -492,115 +494,72 @@ export default function SettingsVideoSide() {
         </SettingsItem>
 
         <SettingsItem
-          title={$at("RC Control")}
-          description={$at("Adjust rate control QP settings for better balance between quality and bitrate")}
+          title={$at("Emulate Monitor Type / EDID")}
+          description={$at("Pick the resolution the captured device sees. Choose Custom to paste a raw EDID.")}
         />
-        <div className="space-y-4">
-          <SettingsItemNew
-            title={$at("StepQp")}
-            description={String(currentSliders.stepQp)}
-            className={"flex-col w-full h-[40px]"}
-          >
-            <Slider
-              min={1}
-              max={51}
-              step={1}
-              value={currentSliders.stepQp}
-              onChange={value => {
-                const nextStepQp = clamp(sliderValueToNumber(value), 1, 50);
-                setRcSliderValues(prev => ({
-                  ...prev,
-                  [currentCodec]: {
-                    ...prev[currentCodec],
-                    stepQp: nextStepQp,
-                  },
-                }));
-              }}
-              className={"w-full"}
-            />
-          </SettingsItemNew>
+        <Select
+            className="w-full bg-transparent"
 
-          <SettingsItemNew
-            title={$at("MinQp")}
-            description={String(currentSliders.minQp)}
-            className={"flex-col w-full h-[40px]"}
-          >
-            <Slider
-              min={1}
-              max={50}
-              step={1}
-              value={currentSliders.minQp}
-              onChange={value => {
-                const nextMinQp = clamp(sliderValueToNumber(value), 1, 50);
-                setRcSliderValues(prev => ({
-                  ...prev,
-                  [currentCodec]: {
-                    ...prev[currentCodec],
-                    minQp: nextMinQp,
-                  },
-                }));
-              }}
-              className={"w-full"}
-            />
-          </SettingsItemNew>
+            defaultValue={customEdidValue ? "custom" : edid || undefined}
+            value={customEdidValue ? "custom" : edid || undefined}
+            placeholder="Select EDID"
+            optionLabelProp={"label"}
+            onChange={e => {
+              if (e === "custom") {
+                setEdid("custom");
+                setCustomEdidValue("");
+              } else {
+                setCustomEdidValue(null);
+                handleEDIDPresetChange(e);
+              }
+            }}
+            options={[
+              ...edidPresets.map(p => {
+                const summary = edidCapsSummary(p.caps);
+                return {
+                  value: p.id,
+                  label: summary ? `${p.label} · ${summary}` : p.label,
+                  disabled: p.disabled,
+                };
+              }),
+              { value: "custom", label: "Custom" },
+            ]}
+          />
 
-          <SettingsItemNew
-            title={$at("MinIQp")}
-            description={String(currentSliders.minIQp)}
-            className={"flex-col w-full h-[40px]"}
-          >
-            <Slider
-              min={1}
-              max={50}
-              step={1}
-              value={currentSliders.minIQp}
-              onChange={value => {
-                const nextMinIQp = clamp(sliderValueToNumber(value), 1, 50);
-                setRcSliderValues(prev => ({
-                  ...prev,
-                  [currentCodec]: {
-                    ...prev[currentCodec],
-                    minIQp: nextMinIQp,
-                  },
-                }));
-              }}
-              className={"w-full"}
+        {customEdidValue !== null && (
+          <>
+            <SettingsItem
+              title={$at("Custom EDID")}
+              description={$at("EDID details video mode compatibility. Default settings works in most cases, but unique UEFI/BIOS might need adjustments.")}
             />
-          </SettingsItemNew>
-
-          <SettingsItemNew
-            title={$at("DetlpQp")}
-            description={String(currentSliders.deltIpQp)}
-            className={"flex-col w-full h-[40px]"}
-          >
-            <Slider
-              min={-7}
-              max={7}
-              step={1}
-              value={currentSliders.deltIpQp}
-              onChange={value => {
-                const nextDeltIpQp = clamp(sliderValueToNumber(value), -7, 7);
-                setRcSliderValues(prev => ({
-                  ...prev,
-                  [currentCodec]: {
-                    ...prev[currentCodec],
-                    deltIpQp: nextDeltIpQp,
-                  },
-                }));
-              }}
-              className={"w-full"}
+            <TextAreaWithLabel
+              label={$at("EDID File")}
+              placeholder="00F..."
+              rows={3}
+              value={customEdidValue}
+              onChange={e => setCustomEdidValue(e.target.value)}
             />
-          </SettingsItemNew>
+            <div className="flex justify-start gap-x-2">
+              <AntdButton
+                type="primary"
+                onClick={() => handleEDIDChange(customEdidValue)}
+              >{$at("Set Custom EDID")}</AntdButton>
+              <AntdButton
+                className={"border-2"}
+                style={{
+                  background: "transparent",
+                  borderColor: "rgba(28,168,0,1)",
+                  whiteSpace: "nowrap",
+                }}
+                onClick={() => {
+                  setCustomEdidValue(null);
+                  handleEDIDChange(defaultEdid.toUpperCase());
+                }}
 
-          <div className="flex justify-end gap-2">
-            <AntdButton onClick={openRcAdvancedModal}>
-              {$at("Advanced")}
-            </AntdButton>
-            <AntdButton type="primary" onClick={applyRcBasicConfig}>
-              {$at("Apply")}
-            </AntdButton>
-          </div>
-        </div>
+              ><div  className={"text-[rgba(28,168,0,1)]"}>{$at("Restore to default")}</div></AntdButton>
+            </div>
+          </>
+        )}
 
         <SettingsItem
           title={$at("NPU Application")}
@@ -708,73 +667,127 @@ export default function SettingsVideoSide() {
           </div>
         </div>
 
-        <SettingsItem
-          title="EDID"
-          description={$at("Adjust the EDID settings for the display")}
+        <Collapse
+          ghost
+          items={[
+            {
+              key: "rc-control",
+              label: $at("RC Control"),
+              children: (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {$at("Adjust rate control QP settings for better balance between quality and bitrate")}
+                  </p>
+                  <SettingsItemNew
+                    title={$at("StepQp")}
+                    description={String(currentSliders.stepQp)}
+                    className={"flex-col w-full h-[40px]"}
+                  >
+                    <Slider
+                      min={1}
+                      max={51}
+                      step={1}
+                      value={currentSliders.stepQp}
+                      onChange={value => {
+                        const nextStepQp = clamp(sliderValueToNumber(value), 1, 50);
+                        setRcSliderValues(prev => ({
+                          ...prev,
+                          [currentCodec]: {
+                            ...prev[currentCodec],
+                            stepQp: nextStepQp,
+                          },
+                        }));
+                      }}
+                      className={"w-full"}
+                    />
+                  </SettingsItemNew>
+
+                  <SettingsItemNew
+                    title={$at("MinQp")}
+                    description={String(currentSliders.minQp)}
+                    className={"flex-col w-full h-[40px]"}
+                  >
+                    <Slider
+                      min={1}
+                      max={50}
+                      step={1}
+                      value={currentSliders.minQp}
+                      onChange={value => {
+                        const nextMinQp = clamp(sliderValueToNumber(value), 1, 50);
+                        setRcSliderValues(prev => ({
+                          ...prev,
+                          [currentCodec]: {
+                            ...prev[currentCodec],
+                            minQp: nextMinQp,
+                          },
+                        }));
+                      }}
+                      className={"w-full"}
+                    />
+                  </SettingsItemNew>
+
+                  <SettingsItemNew
+                    title={$at("MinIQp")}
+                    description={String(currentSliders.minIQp)}
+                    className={"flex-col w-full h-[40px]"}
+                  >
+                    <Slider
+                      min={1}
+                      max={50}
+                      step={1}
+                      value={currentSliders.minIQp}
+                      onChange={value => {
+                        const nextMinIQp = clamp(sliderValueToNumber(value), 1, 50);
+                        setRcSliderValues(prev => ({
+                          ...prev,
+                          [currentCodec]: {
+                            ...prev[currentCodec],
+                            minIQp: nextMinIQp,
+                          },
+                        }));
+                      }}
+                      className={"w-full"}
+                    />
+                  </SettingsItemNew>
+
+                  <SettingsItemNew
+                    title={$at("DetlpQp")}
+                    description={String(currentSliders.deltIpQp)}
+                    className={"flex-col w-full h-[40px]"}
+                  >
+                    <Slider
+                      min={-7}
+                      max={7}
+                      step={1}
+                      value={currentSliders.deltIpQp}
+                      onChange={value => {
+                        const nextDeltIpQp = clamp(sliderValueToNumber(value), -7, 7);
+                        setRcSliderValues(prev => ({
+                          ...prev,
+                          [currentCodec]: {
+                            ...prev[currentCodec],
+                            deltIpQp: nextDeltIpQp,
+                          },
+                        }));
+                      }}
+                      className={"w-full"}
+                    />
+                  </SettingsItemNew>
+
+                  <div className="flex justify-end gap-2">
+                    <AntdButton onClick={openRcAdvancedModal}>
+                      {$at("Advanced")}
+                    </AntdButton>
+                    <AntdButton type="primary" onClick={applyRcBasicConfig}>
+                      {$at("Apply")}
+                    </AntdButton>
+                  </div>
+                </div>
+              ),
+            },
+          ]}
         />
-        <Select
-            className="w-full bg-transparent"
 
-            defaultValue={customEdidValue ? "custom" : edid || undefined}
-            value={customEdidValue ? "custom" : edid || undefined}
-            placeholder="Select EDID"
-            optionLabelProp={"label"}
-            onChange={e => {
-              if (e === "custom") {
-                setEdid("custom");
-                setCustomEdidValue("");
-              } else {
-                setCustomEdidValue(null);
-                handleEDIDPresetChange(e);
-              }
-            }}
-            options={[
-              ...edidPresets.map(p => {
-                const summary = edidCapsSummary(p.caps);
-                return {
-                  value: p.id,
-                  label: summary ? `${p.label} · ${summary}` : p.label,
-                  disabled: p.disabled,
-                };
-              }),
-              { value: "custom", label: "Custom" },
-            ]}
-          />
-
-        {customEdidValue !== null && (
-          <>
-            <SettingsItem
-              title={$at("Custom EDID")}
-              description={$at("EDID details video mode compatibility. Default settings works in most cases, but unique UEFI/BIOS might need adjustments.")}
-            />
-            <TextAreaWithLabel
-              label={$at("EDID File")}
-              placeholder="00F..."
-              rows={3}
-              value={customEdidValue}
-              onChange={e => setCustomEdidValue(e.target.value)}
-            />
-            <div className="flex justify-start gap-x-2">
-              <AntdButton
-                type="primary"
-                onClick={() => handleEDIDChange(customEdidValue)}
-              >{$at("Set Custom EDID")}</AntdButton>
-              <AntdButton
-                className={"border-2"}
-                style={{
-                  background: "transparent",
-                  borderColor: "rgba(28,168,0,1)",
-                  whiteSpace: "nowrap",
-                }}
-                onClick={() => {
-                  setCustomEdidValue(null);
-                  handleEDIDChange(defaultEdid.toUpperCase());
-                }}
-
-              ><div  className={"text-[rgba(28,168,0,1)]"}>{$at("Restore to default")}</div></AntdButton>
-            </div>
-          </>
-        )}
       </div>
       <div className={"h-[10vh]"}></div>
 

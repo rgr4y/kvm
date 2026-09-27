@@ -38,9 +38,9 @@ func TestEDIDDisabledHaveNoBlob(t *testing.T) {
 	}
 }
 
-// The shipped 1080p60 preset must parse to exactly 1920x1080 @ ~60Hz.
+// The shipped 1080p60 blob must parse to exactly 1920x1080 @ ~60Hz.
 func TestEDID1080pParse(t *testing.T) {
-	caps, err := parseEDIDCaps(edid1080p60)
+	caps, err := parseEDIDCaps(mustEDIDHex("1080p60-audio.bin"))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -49,6 +49,28 @@ func TestEDID1080pParse(t *testing.T) {
 	}
 	if caps.Refresh < 59 || caps.Refresh > 61 {
 		t.Errorf("1080p60 refresh = %d, want ~60", caps.Refresh)
+	}
+}
+
+// Every shipped preset's blob must carry a "KVM <mode>" monitor-name descriptor
+// (never a donor monitor model), and its label must match the parsed caps.
+func TestEDIDPresetsAreKVMNamed(t *testing.T) {
+	presets, err := rpcGetEDIDPresets()
+	if err != nil {
+		t.Fatalf("get presets: %v", err)
+	}
+	for _, p := range presets {
+		b, err := hex.DecodeString(p.EDIDHex)
+		if err != nil {
+			t.Errorf("preset %q: decode: %v", p.ID, err)
+			continue
+		}
+		if !bytes.Contains(b, []byte("KVM")) {
+			t.Errorf("preset %q: blob missing 'KVM' monitor name", p.ID)
+		}
+		if want := edidNameForCaps(p.Caps); p.Label != want {
+			t.Errorf("preset %q: label = %q, want %q", p.ID, p.Label, want)
+		}
 	}
 }
 
@@ -70,8 +92,10 @@ func TestEDIDNameForCaps(t *testing.T) {
 }
 
 func TestSetEDIDMonitorName(t *testing.T) {
-	// The stock 1080p blob ships with donor name "T749-fHD720".
-	out, err := setEDIDMonitorName(edid1080p60, "KVM 1080p60")
+	// Rename an arbitrary (custom-style) blob and confirm it stays valid and the
+	// old name is gone — this path sanitizes donor blobs pasted as custom EDIDs.
+	src := mustEDIDHex("1080p60-audio.bin") // ships as "KVM 1080p60"
+	out, err := setEDIDMonitorName(src, "PROBE-1234")
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
@@ -83,11 +107,10 @@ func TestSetEDIDMonitorName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	// The 0xFC descriptor text must now read the new name, and not the donor's.
-	if !bytes.Contains(b, []byte("KVM 1080p60")) {
-		t.Error("renamed blob missing 'KVM 1080p60'")
+	if !bytes.Contains(b, []byte("PROBE-1234")) {
+		t.Error("renamed blob missing new name 'PROBE-1234'")
 	}
-	if bytes.Contains(b, []byte("T749")) {
-		t.Error("renamed blob still carries donor name 'T749'")
+	if bytes.Contains(b, []byte("KVM 1080p60")) {
+		t.Error("renamed blob still carries the old name")
 	}
 }
