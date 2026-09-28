@@ -62,8 +62,12 @@ var edidModeIDs = []string{
 	"1080p60",
 	"1080p30",
 	"1920x1200-60",
-	"1440p60",
-	"2160p30",
+	// 1440p60 (~241MHz) and 2160p30 (~297MHz) exceed the TC358743 HDMI-RX
+	// bridge's 165MHz pixel-clock ceiling (HDMI 1.4a), so the host outputs a mode
+	// the capture path can't ingest and video is lost. Blobs stay shipped under
+	// edid_blobs/; re-enable only against a verified higher-clock capture limit.
+	// "1440p60",
+	// "2160p30",
 }
 
 // validateEDID checks structural validity: whole 128-byte blocks, the fixed
