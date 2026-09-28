@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Layout, Checkbox, theme as AntTheme , Divider } from "antd";
+import { Button, Layout, Checkbox, Divider } from "antd";
 import { PoweroffOutlined, ReloadOutlined } from "@ant-design/icons";
 import { GoDotFill } from "react-icons/go";
 import { useReactAt } from "i18n-auto-extractor/react";
@@ -9,6 +9,7 @@ import { useJsonRpc } from "@/hooks/useJsonRpc";
 import notifications from "@/notifications";
 import { useSerialStore } from "@/hooks/stores";
 import { SettingsPageHeader } from "@components/Settings/SettingsPageheader";
+import { SettingsItem } from "@components/Settings/SettingsView";
 
 const PowerControlUp: React.FC = () => {
   const { $at } = useReactAt(); 
@@ -92,26 +93,24 @@ const PowerControlUp: React.FC = () => {
         title={$at("IO Control")}
         description={$at("Configure your io control settings")}
       />
-      <div className="space-y-4 mt-4 flex items-center">
-        <Checkbox checked={isLatchMode} onChange={(e) => setIsLatchMode(e.target.checked)}>
-          {$at("Latch Mode")}
-        </Checkbox>
+      <div className="mt-4">
+        <SettingsItem
+          title={$at("Latch Mode")}
+          description={$at("Latch or HOLD buttons when pressed")}
+          noCol
+          className="flex-row items-center"
+        >
+        <Checkbox checked={isLatchMode} onChange={(e) => setIsLatchMode(e.target.checked)} />
+        </SettingsItem>
       </div>
-      <div style={{ width: "100%",display:"flex",flexDirection:"row",justifyContent: "space-between",marginTop:32 }}>
+      <div className="mt-4 flex w-full flex-row justify-between space-y-4">
         <Button
           type={(isLatchMode && powerState === false) ? "default" : "primary"}
           danger={isLatchMode && powerState}
           icon={<PoweroffOutlined />}
           size="large"
           onClick={handlePowerClick}
-          style={{
-            width: "49%",
-            height: 36,
-            fontSize: "16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className="flex h-9 w-[49%] items-center justify-center text-base"
         >
           {$at("Power")}
         </Button>
@@ -122,14 +121,7 @@ const PowerControlUp: React.FC = () => {
           icon={<ReloadOutlined />}
           size="large"
           onClick={handleResetClick}
-          style={{
-            width: "49%",
-            height: 36,
-            fontSize: "16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className="flex h-9 w-[49%] items-center justify-center text-base"
         >
           {$at("Reset")}
         </Button>
@@ -137,38 +129,21 @@ const PowerControlUp: React.FC = () => {
 
       {!isConnected && (
         <>
-          <Divider />
+          <Divider className="mb-0!" />
 
-          <div style={{ width: "100%", justifyContent: "space-between" }}>
-            <div style={{
-              width: "100%",
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "space-between",
-            }}>
-              <div style={{
-                width: "45%",
-                height: 48,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px"
-              }}>
+          <div className="flex w-full justify-between">
+            <div className="flex w-full flex-row justify-between">
+              <div className="flex h-12 w-[45%] items-center gap-2">
                 <GoDotFill size="2em" className={powerLed ? "text-green-500" : "text-gray-400"} />
                 <span className={dark_font_style}>{$at("Power LED")}</span>
               </div>
-              <div style={{
-                width: "45%",
-                height: 48,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px"
-              }}>
+              <div className="flex h-12 w-[45%] items-center gap-2">
                 <GoDotFill size="2em" className={hddLed ? "text-green-500" : "text-gray-400"} />
                 <span className={dark_font_style}>{$at("HDD LED")}</span>
               </div>
             </div>
           </div>
-          <Divider style={{ marginTop: 0 }} />
+          <Divider className="mt-0!" />
         </>
       )}
     </Layout>
