@@ -598,6 +598,13 @@ func rpcGetDisplayRotation() (*DisplayRotationSettings, error) {
 	}, nil
 }
 
+// rpcGetDisplayPresent reports whether the front-panel touchscreen display is
+// attached, so the UI can hide display-only settings on units with no panel.
+// See displayPresent (native_display.go) for the detection rationale.
+func rpcGetDisplayPresent() (bool, error) {
+	return displayPresent(), nil
+}
+
 func rpcSetBacklightSettings(params BacklightSettings) error {
 	blConfig := params
 
@@ -1913,6 +1920,7 @@ var rpcHandlers = map[string]RPCHandler{
 	"getIceServers":             {Func: rpcGetIceServers},
 	"setDisplayRotation":        {Func: rpcSetDisplayRotation, Params: []string{"params"}},
 	"getDisplayRotation":        {Func: rpcGetDisplayRotation},
+	"getDisplayPresent":         {Func: rpcGetDisplayPresent},
 	"setBacklightSettings":      {Func: rpcSetBacklightSettings, Params: []string{"params"}},
 	"getBacklightSettings":      {Func: rpcGetBacklightSettings},
 	"setTimeZone":               {Func: rpcSetTimeZone, Params: []string{"timeZone"}},

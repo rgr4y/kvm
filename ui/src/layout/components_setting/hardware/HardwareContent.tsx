@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { Select as SelectMenuBasic , Button as AntdButton } from "antd";
 import {useReactAt} from 'i18n-auto-extractor/react'
 import { isMobile } from "react-device-detect";
@@ -15,6 +15,17 @@ export default function SettingsHardware() {
   const { $at }= useReactAt();
   const [send] = useJsonRpc();
   const settings = useSettingsStore();
+
+  // Front-panel display detection: units with no touchscreen panel hide all
+  // display-only settings. Default true so a fetch failure never wrongly hides.
+  const [displayPresent, setDisplayPresent] = useState(true);
+
+  useEffect(() => {
+    send("getDisplayPresent", {}, resp => {
+      if ("error" in resp) return;
+      setDisplayPresent(Boolean(resp.result));
+    });
+  }, [send]);
 
   const setDisplayRotation = useSettingsStore(state => state.setDisplayRotation);
 
@@ -162,6 +173,8 @@ export default function SettingsHardware() {
         description={$at("Configure display settings and hardware options for your KVM device")}
       />
       <div className="space-y-4">
+        {displayPresent && (
+        <>
         <SettingsItem
           title={$at("Display Orientation")}
           description={$at("Set the orientation of the display")}
@@ -258,6 +271,8 @@ export default function SettingsHardware() {
             </p>
 
           </>
+        )}
+        </>
         )}
 
         <SettingsItem
