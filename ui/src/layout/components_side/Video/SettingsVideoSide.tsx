@@ -538,13 +538,17 @@ export default function SettingsVideoSide() {
           />
 
         {edid && edid !== "custom" && (
-          <Checkbox
-            className="mt-2"
-            checked={edidAudio}
-            onChange={e => handleEDIDAudioChange(e.target.checked)}
+          <SettingsItem
+            title={$at("HDMI audio (LPCM stereo)")}
+            description={$at("Advertise LPCM stereo audio in the EDID so the host outputs HDMI audio")}
+            noCol
+            className="flex-row items-center"
           >
-            {$at("HDMI audio (LPCM stereo)")}
-          </Checkbox>
+            <Checkbox
+              checked={edidAudio}
+              onChange={e => handleEDIDAudioChange(e.target.checked)}
+            />
+          </SettingsItem>
         )}
 
         {customEdidValue !== null && (
@@ -689,12 +693,16 @@ export default function SettingsVideoSide() {
         </div>
 
         <Collapse
+          ghost
           items={[
             {
               key: "rc-control",
               label: $at("RC Control"),
               children: (
                 <div className="space-y-4">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {$at("Adjust rate control QP settings for better balance between quality and bitrate")}
+                  </p>
           <SettingsItemNew
             title={$at("StepQp")}
             description={String(currentSliders.stepQp)}
