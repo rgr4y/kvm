@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-DEPLOY=10.0.1.88
+DEPLOY=${1:-10.0.1.88}
 
+echo "Deploying to $DEPLOY"
 if [ "$1" != "nobuild" ]; then
 	make frontend && make build_dev
 fi
