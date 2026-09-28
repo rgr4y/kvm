@@ -505,6 +505,190 @@ export default function SettingsVideoSide() {
         </SettingsItem>
 
         <SettingsItem
+          title="EDID"
+          description={$at("Adjust the EDID settings for the display")}
+        />
+        <Select
+            className="w-full bg-transparent"
+
+            defaultValue={customEdidValue ? "custom" : edid || undefined}
+            value={customEdidValue ? "custom" : edid || undefined}
+            placeholder="Select EDID"
+            optionLabelProp={"label"}
+            onChange={e => {
+              if (e === "custom") {
+                setEdid("custom");
+                setCustomEdidValue("");
+              } else {
+                setCustomEdidValue(null);
+                handleEDIDPresetChange(e, edidAudio);
+              }
+            }}
+            options={[
+              ...edidPresets.map(p => {
+                const summary = edidCapsSummary(p.caps);
+                return {
+                  value: p.id,
+                  label: summary ? `${p.label} · ${summary}` : p.label,
+                  disabled: p.disabled,
+                };
+              }),
+              { value: "custom", label: "Custom" },
+            ]}
+          />
+
+        {edid && edid !== "custom" && (
+          <Checkbox
+            className="mt-2"
+            checked={edidAudio}
+            onChange={e => handleEDIDAudioChange(e.target.checked)}
+          >
+            {$at("HDMI audio (LPCM stereo)")}
+          </Checkbox>
+        )}
+
+        {customEdidValue !== null && (
+          <>
+            <SettingsItem
+              title={$at("Custom EDID")}
+              description={$at("EDID details video mode compatibility. Default settings works in most cases, but unique UEFI/BIOS might need adjustments.")}
+            />
+            <TextAreaWithLabel
+              label={$at("EDID File")}
+              placeholder="00F..."
+              rows={3}
+              value={customEdidValue}
+              onChange={e => setCustomEdidValue(e.target.value)}
+            />
+            <div className="flex justify-start gap-x-2">
+              <AntdButton
+                type="primary"
+                onClick={() => handleEDIDChange(customEdidValue)}
+              >{$at("Set Custom EDID")}</AntdButton>
+              <AntdButton
+                className={"border-2"}
+                style={{
+                  background: "transparent",
+                  borderColor: "rgba(28,168,0,1)",
+                  whiteSpace: "nowrap",
+                }}
+                onClick={() => {
+                  setCustomEdidValue(null);
+                  handleEDIDChange(defaultEdid.toUpperCase());
+                }}
+
+              ><div  className={"text-[rgba(28,168,0,1)]"}>{$at("Restore to default")}</div></AntdButton>
+            </div>
+          </>
+        )}
+
+        <SettingsItem
+          title={$at("NPU Application")}
+          badge="Experimental"
+          description={$at("Enable NPU to Object Detection")}
+          noCol
+          className="flex-row items-center"
+        >
+          <Checkbox
+            checked={npuAppStatus}
+            onChange={e => handleNpuAppStatusChange(e.target.checked)}
+          />
+        </SettingsItem>
+
+        {/* Video Enhancement Settings */}
+        <SettingsItem
+          title={$at("Video Enhancement")}
+          description={$at("Adjust color settings to make the video output more vibrant and colorful")}
+        />
+
+        <div className="space-y-4">
+          <SettingsItemNew
+            title={$at("Saturation")}
+            description={`${videoSaturation.toFixed(1)}x`}
+            className={"flex-col w-full h-[40px]"}
+          >
+
+            <Slider
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              value={videoSaturation}
+              onChange={value => setVideoSaturation(value)}
+              className={"w-full"}
+              styles={{
+                rail: {
+                  borderRadius: '4px'
+                },
+                track: {
+                  borderRadius: '4px'
+                }
+              }}
+            >
+            </Slider>
+          </SettingsItemNew>
+
+          <SettingsItemNew
+            title={$at("Brightness")}
+            description={`${videoBrightness.toFixed(1)}x`}
+            className={"flex-col w-full h-[40px]"}
+          >
+            <Slider
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              value={videoBrightness}
+              onChange={value => setVideoBrightness(value)}
+              className={"w-full"}
+              styles={{
+                rail: {
+                  borderRadius: '4px'
+                },
+                track: {
+                  borderRadius: '4px'
+                }
+              }}
+            >
+            </Slider>
+          </SettingsItemNew>
+
+          <SettingsItemNew
+            title={$at("Contrast")}
+            description={`${videoContrast.toFixed(1)}x`}
+            className={"flex-col w-full h-[40px]"}
+          >
+            <Slider
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              value={videoContrast}
+              onChange={value => setVideoContrast(value)}
+              className={"w-full"}
+              styles={{
+                rail: {
+                  borderRadius: '4px'
+                },
+                track: {
+                  borderRadius: '4px'
+                }
+              }}
+            >
+            </Slider>
+          </SettingsItemNew>
+
+          <div className="flex gap-2">
+            <AntdButton
+              className={"w-full my-2"}
+              type={"primary"}
+              onClick={() => {
+                setVideoSaturation(1.0);
+                setVideoBrightness(1.0);
+                setVideoContrast(1.0);
+              }}
+            >{$at("Reset to Default")}</AntdButton>
+          </div>
+        </div>
+
+        <SettingsItem
           title={$at("RC Control")}
           description={$at("Adjust rate control QP settings for better balance between quality and bitrate")}
         />
@@ -614,190 +798,6 @@ export default function SettingsVideoSide() {
             </AntdButton>
           </div>
         </div>
-
-        <SettingsItem
-          title={$at("NPU Application")}
-          badge="Experimental"
-          description={$at("Enable NPU to Object Detection")}
-          noCol
-          className="flex-row items-center"
-        >
-          <Checkbox
-            checked={npuAppStatus}
-            onChange={e => handleNpuAppStatusChange(e.target.checked)}
-          />
-        </SettingsItem>
-
-        {/* Video Enhancement Settings */}
-        <SettingsItem
-          title={$at("Video Enhancement")}
-          description={$at("Adjust color settings to make the video output more vibrant and colorful")}
-        />
-
-        <div className="space-y-4">
-          <SettingsItemNew
-            title={$at("Saturation")}
-            description={`${videoSaturation.toFixed(1)}x`}
-            className={"flex-col w-full h-[40px]"}
-          >
-
-            <Slider
-              min={0.5}
-              max={2.0}
-              step={0.1}
-              value={videoSaturation}
-              onChange={value => setVideoSaturation(value)}
-              className={"w-full"}
-              styles={{
-                rail: {
-                  borderRadius: '4px'
-                },
-                track: {
-                  borderRadius: '4px'
-                }
-              }}
-            >
-            </Slider>
-          </SettingsItemNew>
-
-          <SettingsItemNew
-            title={$at("Brightness")}
-            description={`${videoBrightness.toFixed(1)}x`}
-            className={"flex-col w-full h-[40px]"}
-          >
-            <Slider
-              min={0.5}
-              max={2.0}
-              step={0.1}
-              value={videoBrightness}
-              onChange={value => setVideoBrightness(value)}
-              className={"w-full"}
-              styles={{
-                rail: {
-                  borderRadius: '4px'
-                },
-                track: {
-                  borderRadius: '4px'
-                }
-              }}
-            >
-            </Slider>
-          </SettingsItemNew>
-
-          <SettingsItemNew
-            title={$at("Contrast")}
-            description={`${videoContrast.toFixed(1)}x`}
-            className={"flex-col w-full h-[40px]"}
-          >
-            <Slider
-              min={0.5}
-              max={2.0}
-              step={0.1}
-              value={videoContrast}
-              onChange={value => setVideoContrast(value)}
-              className={"w-full"}
-              styles={{
-                rail: {
-                  borderRadius: '4px'
-                },
-                track: {
-                  borderRadius: '4px'
-                }
-              }}
-            >
-            </Slider>
-          </SettingsItemNew>
-
-          <div className="flex gap-2">
-            <AntdButton
-              className={"w-full my-2"}
-              type={"primary"}
-              onClick={() => {
-                setVideoSaturation(1.0);
-                setVideoBrightness(1.0);
-                setVideoContrast(1.0);
-              }}
-            >{$at("Reset to Default")}</AntdButton>
-          </div>
-        </div>
-
-        <SettingsItem
-          title="EDID"
-          description={$at("Adjust the EDID settings for the display")}
-        />
-        <Select
-            className="w-full bg-transparent"
-
-            defaultValue={customEdidValue ? "custom" : edid || undefined}
-            value={customEdidValue ? "custom" : edid || undefined}
-            placeholder="Select EDID"
-            optionLabelProp={"label"}
-            onChange={e => {
-              if (e === "custom") {
-                setEdid("custom");
-                setCustomEdidValue("");
-              } else {
-                setCustomEdidValue(null);
-                handleEDIDPresetChange(e, edidAudio);
-              }
-            }}
-            options={[
-              ...edidPresets.map(p => {
-                const summary = edidCapsSummary(p.caps);
-                return {
-                  value: p.id,
-                  label: summary ? `${p.label} · ${summary}` : p.label,
-                  disabled: p.disabled,
-                };
-              }),
-              { value: "custom", label: "Custom" },
-            ]}
-          />
-
-        {edid && edid !== "custom" && (
-          <Checkbox
-            className="mt-2"
-            checked={edidAudio}
-            onChange={e => handleEDIDAudioChange(e.target.checked)}
-          >
-            {$at("HDMI audio (LPCM stereo)")}
-          </Checkbox>
-        )}
-
-        {customEdidValue !== null && (
-          <>
-            <SettingsItem
-              title={$at("Custom EDID")}
-              description={$at("EDID details video mode compatibility. Default settings works in most cases, but unique UEFI/BIOS might need adjustments.")}
-            />
-            <TextAreaWithLabel
-              label={$at("EDID File")}
-              placeholder="00F..."
-              rows={3}
-              value={customEdidValue}
-              onChange={e => setCustomEdidValue(e.target.value)}
-            />
-            <div className="flex justify-start gap-x-2">
-              <AntdButton
-                type="primary"
-                onClick={() => handleEDIDChange(customEdidValue)}
-              >{$at("Set Custom EDID")}</AntdButton>
-              <AntdButton
-                className={"border-2"}
-                style={{
-                  background: "transparent",
-                  borderColor: "rgba(28,168,0,1)",
-                  whiteSpace: "nowrap",
-                }}
-                onClick={() => {
-                  setCustomEdidValue(null);
-                  handleEDIDChange(defaultEdid.toUpperCase());
-                }}
-
-              ><div  className={"text-[rgba(28,168,0,1)]"}>{$at("Restore to default")}</div></AntdButton>
-            </div>
-          </>
-        )}
       </div>
       <div className={"h-[10vh]"}></div>
 
