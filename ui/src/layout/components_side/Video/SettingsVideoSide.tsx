@@ -35,6 +35,56 @@ type EdidPreset = {
   note?: string;
 };
 
+// Parse resolution/refresh (detailed timing #1) and audio (CEA-861) from a raw EDID
+// hex blob, mirroring the Go parseEDIDCaps. Used to match an applied EDID back to a
+// preset by capability: the applied blob is the audio variant and/or carries a
+// rewritten "KVM <mode>" monitor-name descriptor, so it never equals the stored
+// plain blob byte-for-byte.
+const parseEdidHexCaps = (hexStr: string): EdidCaps | null => {
+  const hex = hexStr.trim();
+  if (hex.length < 256 || hex.length % 2 !== 0) return null;
+  const b = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < b.length; i++) {
+    const byte = parseInt(hex.substr(i * 2, 2), 16);
+    if (Number.isNaN(byte)) return null;
+    b[i] = byte;
+  }
+  const d = b.subarray(54, 72); // detailed timing descriptor #1
+  const pixClkKHz = ((d[1] << 8) | d[0]) * 10;
+  let maxRes = "";
+  let refresh = 0;
+  if (pixClkKHz > 0) {
+    const hActive = ((d[4] & 0xf0) << 4) | d[2];
+    const hBlank = ((d[4] & 0x0f) << 8) | d[3];
+    const vActive = ((d[7] & 0xf0) << 4) | d[5];
+    const vBlank = ((d[7] & 0x0f) << 8) | d[6];
+    const hTotal = hActive + hBlank;
+    const vTotal = vActive + vBlank;
+    maxRes = `${hActive}x${vActive}`;
+    if (hTotal > 0 && vTotal > 0) {
+      refresh = Math.round((pixClkKHz * 1000) / (hTotal * vTotal));
+    }
+  }
+  let audio = false;
+  let hdr = false;
+  if (b.length >= 256 && b[126] > 0 && b[128] === 0x02) {
+    const ext = b.subarray(128, 256);
+    if ((ext[3] & 0x40) !== 0) audio = true; // basic audio flag
+    const dtdStart = ext[2];
+    if (dtdStart >= 4 && dtdStart <= ext.length) {
+      let i = 4;
+      while (i < dtdStart) {
+        const tag = ext[i] >> 5;
+        const length = ext[i] & 0x1f;
+        if (tag === 1) audio = true; // Audio Data Block
+        else if (tag === 7 && i + 1 < ext.length && ext[i + 1] === 6) hdr = true; // HDR metadata
+        i += 1 + length;
+      }
+    }
+  }
+  return { maxRes, refresh, audio, hdr };
+};
+
 // Build a "· 1920x1080 · 60Hz" suffix from parsed caps for the dropdown. Audio is
 // deliberately omitted — it's controlled by the HDMI-audio checkbox, not baked per
 // mode, so the presets carry no audio variant in the list.
@@ -372,13 +422,23 @@ export default function SettingsVideoSide() {
 
         const receivedEdid = resp.result as string;
 
-        const match = presets.find(
-          p => p.edidHex && p.edidHex.toLowerCase() === receivedEdid.toLowerCase(),
-        );
+        // Match by capability (resolution + refresh), not exact hex: the applied
+        // blob is the audio variant and/or has a rewritten monitor-name descriptor,
+        // so it never equals the stored plain blob byte-for-byte.
+        const activeCaps = parseEdidHexCaps(receivedEdid);
+        const match = activeCaps
+          ? presets.find(
+              p =>
+                !p.disabled &&
+                p.caps?.maxRes === activeCaps.maxRes &&
+                p.caps?.refresh === activeCaps.refresh,
+            )
+          : undefined;
 
         if (match) {
           setEdid(match.id);
           setCustomEdidValue(null);
+          setEdidAudio(activeCaps?.audio ?? false);
         } else {
           setEdid("custom");
           setCustomEdidValue(receivedEdid);
