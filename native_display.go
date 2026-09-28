@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -228,7 +230,33 @@ func superviseDisplayBinary(binaryPath string) error {
 	return restartDisplayBinary(binaryPath)
 }
 
+// displayPresent reports whether the PicoKVM front panel is attached. The panel
+// module carries a Hynitron CST816X I2C touchscreen, whose input device exists
+// only when the panel is connected. The ST7789V SPI framebuffer (/dev/fb0) is NOT
+// a valid signal: the DT instantiates it unconditionally (SPI is write-only, no
+// connect-detect), so it is present even on units with no panel. Match any input
+// device whose name marks it a touchscreen, which excludes the always-present
+// "adc-keys" buttons.
+func displayPresent() bool {
+	names, _ := filepath.Glob("/sys/class/input/event*/device/name")
+	for _, p := range names {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(strings.ToLower(string(b)), "touchscreen") {
+			return true
+		}
+	}
+	return false
+}
+
 func ExtractAndRunDisplayBin() error {
+	if !displayPresent() {
+		displayLogger.Info().Msg("no front-panel touchscreen detected; skipping kvm_display")
+		return nil
+	}
+
 	binaryPath := "/userdata/picokvm/bin/kvm_display"
 
 	// Make the binary executable
