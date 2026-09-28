@@ -523,6 +523,37 @@ export default function SettingsVideoSide() {
     });
   };
 
+  // Restore-to-default: apply the built-in EDID and reconcile the picker. The
+  // default blob matches a shipped preset by capability, so route through the
+  // preset path (proper monitor-name apply + dropdown selection) and hide the
+  // Custom textarea. Fall back to a raw apply only if nothing matches.
+  const handleRestoreDefaultEdid = () => {
+    setCustomEdidValue(null);
+    const caps = parseEdidHexCaps(defaultEdid);
+    const match = caps
+      ? edidPresets.find(
+          p =>
+            !p.disabled &&
+            p.caps?.maxRes === caps.maxRes &&
+            p.caps?.refresh === caps.refresh,
+        )
+      : undefined;
+    if (match) {
+      setEdidAudio(false);
+      handleEDIDPresetChange(match.id, false);
+      return;
+    }
+    send("setEDID", { edid: defaultEdid.toUpperCase() }, resp => {
+      if ("error" in resp) {
+        notifications.error(`Failed to set EDID: ${resp.error.data || "Unknown error"}`);
+        return;
+      }
+      notifications.success("Restored default EDID");
+      setEdid(null);
+      setEdidAudio(false);
+    });
+  };
+
   // Toggling HDMI audio re-applies the currently selected preset with the new
   // audio setting (no effect on a Custom blob).
   const handleEDIDAudioChange = (audio: boolean) => {
@@ -640,10 +671,7 @@ export default function SettingsVideoSide() {
                   borderColor: "rgba(28,168,0,1)",
                   whiteSpace: "nowrap",
                 }}
-                onClick={() => {
-                  setCustomEdidValue(null);
-                  handleEDIDChange(defaultEdid.toUpperCase());
-                }}
+                onClick={handleRestoreDefaultEdid}
 
               ><div  className={"text-[rgba(28,168,0,1)]"}>{$at("Restore to default")}</div></AntdButton>
             </div>
