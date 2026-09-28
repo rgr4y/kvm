@@ -35,12 +35,13 @@ type EdidPreset = {
   note?: string;
 };
 
-// Build a "· 1920x1080 · 60Hz · audio" suffix from parsed caps for the dropdown.
+// Build a "· 1920x1080 · 60Hz" suffix from parsed caps for the dropdown. Audio is
+// deliberately omitted — it's controlled by the HDMI-audio checkbox, not baked per
+// mode, so the presets carry no audio variant in the list.
 const edidCapsSummary = (caps?: EdidCaps): string => {
   if (!caps || !caps.maxRes) return "";
   const parts = [caps.maxRes];
   if (caps.refresh) parts.push(`${caps.refresh}Hz`);
-  parts.push(caps.audio ? "audio" : "no audio");
   if (caps.hdr) parts.push("HDR");
   return parts.join(" · ");
 };
@@ -508,6 +509,7 @@ export default function SettingsVideoSide() {
           title="EDID"
           description={$at("Adjust the EDID settings for the display")}
         />
+        <div className="space-y-4">
         <Select
             className="w-full bg-transparent"
 
@@ -536,8 +538,9 @@ export default function SettingsVideoSide() {
               { value: "custom", label: "Custom" },
             ]}
           />
-
+        </div>
         {edid && edid !== "custom" && (
+        <>
           <SettingsItem
             title={$at("HDMI audio (LPCM stereo)")}
             description={$at("Advertise LPCM stereo audio in the EDID so the host outputs HDMI audio")}
@@ -549,6 +552,7 @@ export default function SettingsVideoSide() {
               onChange={e => handleEDIDAudioChange(e.target.checked)}
             />
           </SettingsItem>
+        </>   
         )}
 
         {customEdidValue !== null && (
@@ -586,26 +590,24 @@ export default function SettingsVideoSide() {
           </>
         )}
 
-        <SettingsItem
-          title={$at("NPU Application")}
-          badge="Experimental"
-          description={$at("Enable NPU to Object Detection")}
-          noCol
-          className="flex-row items-center"
-        >
-          <Checkbox
-            checked={npuAppStatus}
-            onChange={e => handleNpuAppStatusChange(e.target.checked)}
+          <SettingsItem
+            title={$at("NPU Application")}
+            badge="Experimental"
+            description={$at("Enable NPU to Object Detection")}
+            noCol
+            className="flex-row items-center"
+          >
+            <Checkbox
+              checked={npuAppStatus}
+              onChange={e => handleNpuAppStatusChange(e.target.checked)}
+            />
+          </SettingsItem>
+
+          {/* Video Enhancement Settings */}
+          <SettingsItem
+            title={$at("Video Enhancement")}
+            description={$at("Adjust color settings to make the video output more vibrant and colorful")}
           />
-        </SettingsItem>
-
-        {/* Video Enhancement Settings */}
-        <SettingsItem
-          title={$at("Video Enhancement")}
-          description={$at("Adjust color settings to make the video output more vibrant and colorful")}
-        />
-
-        <div className="space-y-4">
           <SettingsItemNew
             title={$at("Saturation")}
             description={`${videoSaturation.toFixed(1)}x`}
@@ -812,7 +814,6 @@ export default function SettingsVideoSide() {
             },
           ]}
         />
-      </div>
       <div className={"h-[10vh]"}></div>
 
       <Modal
