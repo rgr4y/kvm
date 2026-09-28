@@ -206,7 +206,14 @@ func handleVpnCtrlClient(conn net.Conn) {
 		}
 		switch vpnResp.Event {
 		case "vpn_display_update":
-			HandleVpnDisplayUpdateMessage(vpnResp)
+			// Forward to the front-panel display in a goroutine: it blocks on the
+			// display ctrl client (waitDisplayCtrlClientConnected), so running it
+			// inline would stall this read loop and every vpn response would time
+			// out. Skip entirely when kvm_display isn't running (no panel) — the
+			// wait would block forever and there is no label to update.
+			if displayRunning() {
+				go HandleVpnDisplayUpdateMessage(vpnResp)
+			}
 		}
 	}
 

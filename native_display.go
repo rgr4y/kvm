@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,6 +18,17 @@ var (
 	displayCmd     *exec.Cmd
 	displayCmdLock = &sync.Mutex{}
 )
+
+// displayBinaryRunning is true once kvm_display has been launched. When no front
+// panel is present ExtractAndRunDisplayBin skips the launch, so this stays false
+// and callers must NOT block waiting for the display ctrl client to connect (it
+// never will). Guards against stalling the vpn ctrl read loop, which forwards
+// vpn_display_update events into the display and would otherwise block forever.
+var displayBinaryRunning atomic.Bool
+
+func displayRunning() bool {
+	return displayBinaryRunning.Load()
+}
 
 var displaySocketConn net.Conn
 
@@ -268,6 +280,7 @@ func ExtractAndRunDisplayBin() error {
 	if err != nil {
 		return fmt.Errorf("failed to start binary: %w", err)
 	}
+	displayBinaryRunning.Store(true)
 
 	// check if the binary is still running every 10 seconds
 	go func() {

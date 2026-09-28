@@ -137,7 +137,7 @@ const PowerControlUp: React.FC = () => {
 
       {!isConnected && (
         <>
-          <Divider style={{ marginTop: 32 }} />
+          <Divider />
 
           <div style={{ width: "100%", justifyContent: "space-between" }}>
             <div style={{
