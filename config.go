@@ -228,11 +228,11 @@ var defaultConfig = &Config{
 	ForceHpd:             false,
 	UsbEnhancedDetection: true,
 	UsbConfig: &usbgadget.Config{
-		VendorId:     "0x1d6b", // The Linux Foundation
-		ProductId:    "0x0104", // Multifunction Composite Gadget
+		VendorId:     "0x4b4d", // "KM" — not in usb.ids, so hosts show the strings below instead of a resolved vendor name
+		ProductId:    "0x0001",
 		SerialNumber: "",
-		Manufacturer: "KVM",
-		Product:      "USB Emulation Device",
+		Manufacturer: "Luckfox",
+		Product:      "PicoKVM",
 	},
 	UsbDevices: &usbgadget.Devices{
 		AbsoluteMouse: true,

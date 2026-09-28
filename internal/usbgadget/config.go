@@ -34,8 +34,8 @@ var defaultGadgetConfig = map[string]gadgetConfigItem{
 		order: 0,
 		attrs: gadgetAttributes{
 			"bcdUSB":    "0x0200", // USB 2.0
-			"idVendor":  "0x1d6b", // The Linux Foundation
-			"idProduct": "0104",   // Multifunction Composite Gadget
+			"idVendor":  "0x4b4d", // "KM" — not in usb.ids, so hosts fall back to the iManufacturer/iProduct strings below instead of resolving a vendor name
+			"idProduct": "0001",
 			"bcdDevice": "0100",
 		},
 		configAttrs: gadgetAttributes{
@@ -49,8 +49,8 @@ var defaultGadgetConfig = map[string]gadgetConfigItem{
 		configPath: []string{"strings", "0x409"},
 		attrs: gadgetAttributes{
 			"serialnumber": "",
-			"manufacturer": "KVM",
-			"product":      "KVM USB Emulation Device",
+			"manufacturer": "Luckfox",
+			"product":      "PicoKVM",
 		},
 		configAttrs: gadgetAttributes{
 			"configuration": "Config 1: HID",
