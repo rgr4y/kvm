@@ -436,6 +436,9 @@ interface SettingsState {
   invertScroll: boolean;
   setInvertScroll: (enabled: boolean) => void;
 
+  jigglerEnabled: boolean;
+  setJigglerEnabled: (enabled: boolean) => void;
+
   showPressedKeys: boolean;
   setShowPressedKeys: (show: boolean) => void;
 
@@ -518,6 +521,9 @@ export const useSettingsStore = create(
 
       invertScroll: false,
       setInvertScroll: enabled => set({ invertScroll: enabled }),
+
+      jigglerEnabled: false,
+      setJigglerEnabled: enabled => set({ jigglerEnabled: enabled }),
 
       showPressedKeys: true,
       setShowPressedKeys: show => set({ showPressedKeys: show }),

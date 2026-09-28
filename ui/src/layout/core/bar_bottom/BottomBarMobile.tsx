@@ -112,7 +112,7 @@ export default function BottomBarMobile() {
   const tabs = [
     { icon: isDark ? Keyboard2SVG : KeyboardSVG, label: $at("keyboard") },
     { icon: MouseSVG, label: $at("mouse") },
-    { icon: USCSvg, label: $at("UAC") },
+    { icon: USCSvg, label: $at("USB Audio") },
     { icon: MediaSVG, label: $at("media") },
     { icon: isDark ? Video2SVG : VideoSVG, label: $at("video") },
     { icon: StateSvg, label: $at("status") },

@@ -38,16 +38,19 @@ const MousePanel: React.FC = () => {
   const { isEnabled: isScrollSensitivityEnabled } = useFeatureFlag("0.3.8");
   const [send] = useJsonRpc();
   const [others, setOthers] = useState<string[]>([]);
+  const setJigglerEnabled = useSettingsStore(state => state.setJigglerEnabled);
 
   useEffect(() => {
     send("getJigglerState", {}, (resp) => {
       if (!("error" in resp) && resp.result) {
         setOthers((prevItems: string[]) => [...prevItems, "jiggler"]);
+        setJigglerEnabled(true);
       } else {
         setOthers((prevItems) => prevItems.filter(item => item !== "jiggler"));
+        setJigglerEnabled(false);
       }
     });
-  }, [isScrollSensitivityEnabled, send]);
+  }, [isScrollSensitivityEnabled, send, setJigglerEnabled]);
 
   useEffect(() => {
     if (hideCursor) {
@@ -98,6 +101,7 @@ const MousePanel: React.FC = () => {
           `Failed to set jiggler state: ${resp.error.data || "Unknown error"}`,
         );
       } else {
+        setJigglerEnabled(enabled);
         if (enabled) {
           console.log("handleJigglerChange if", enabled);
           setOthers((prevItems: string[]) => [...prevItems, "jiggler"]);

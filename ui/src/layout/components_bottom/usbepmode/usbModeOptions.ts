@@ -8,7 +8,7 @@ export const USB_MODE_OPTIONS: UsbModeOption[] = [
   {
     value: 'uac',
     label: 'UAC（USB Audio Card）',
-    displayLabel: 'UAC'
+    displayLabel: 'USB Audio'
   },
   {
     value: 'mtp',

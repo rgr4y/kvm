@@ -48,6 +48,7 @@ export default function BottomBarPC() {
   const setDisableFocusTrap = useUiStore(state => state.setDisableVideoFocusTrap);
   const toggleSidebarView = useUiStore(state => state.toggleSidebarView);
   const showPressedKeys = useSettingsStore(state => state.showPressedKeys);
+  const jigglerEnabled = useSettingsStore(state => state.jigglerEnabled);
   const forceHttp = useSettingsStore(state => state.forceHttp);
   const sidebarView = useUiStore(state => state.sidebarView);
   const peerConnectionState = useRTCStore(state => state.peerConnectionState);
@@ -163,6 +164,7 @@ export default function BottomBarPC() {
             <BottomPopoverButton
               buttonText={$at("Mouse")}
               buttonIconNode={<MouseSVG fontSize={16} />}
+              style={{ color: jigglerEnabled ? "rgba(0, 205, 27, 1)" : "inherit" }}
               align="left"
               panelContent={<MousePanel />}
             />
