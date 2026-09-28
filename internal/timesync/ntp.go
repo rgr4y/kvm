@@ -21,9 +21,19 @@ var defaultNTPServers = []string{
 	"3.pool.ntp.org",
 }
 
+// getNTPServers returns the user-configured NTP servers (from network config)
+// when set, else the built-in defaults. A fresh copy every call: queryNetworkTime
+// shuffles in place, so returning the config slice directly would scramble it.
+func (t *TimeSync) getNTPServers() []string {
+	if t.networkConfig != nil && len(t.networkConfig.TimeSyncNTPServers) > 0 {
+		return append([]string(nil), t.networkConfig.TimeSyncNTPServers...)
+	}
+	return append([]string(nil), t.ntpServers...)
+}
+
 func (t *TimeSync) queryNetworkTime() (now *time.Time, offset *time.Duration) {
 	chunkSize := 4
-	ntpServers := t.ntpServers
+	ntpServers := t.getNTPServers()
 
 	// shuffle the ntp servers to avoid always querying the same servers
 	rand.Shuffle(len(ntpServers), func(i, j int) { ntpServers[i], ntpServers[j] = ntpServers[j], ntpServers[i] })

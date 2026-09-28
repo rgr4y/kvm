@@ -1041,6 +1041,7 @@ export interface NetworkSettings {
   lldp_tx_tlvs: string[];
   mdns_mode: mDNSMode;
   time_sync_mode: TimeSyncMode;
+  time_sync_ntp_servers?: string[];
   pending_reboot?: boolean;
 }
 

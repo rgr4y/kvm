@@ -344,6 +344,24 @@ export default function SettingsNetwork() {
   const [pendingIpv4Mode, setPendingIpv4Mode] = useState<IPv4Mode | null>(null);
   const [ipv4StaticDnsText, setIpv4StaticDnsText] = useState("");
 
+  // NTP servers edit as free text; parsed to array on change so the shared Save
+  // (setNetworkSettingsRemote(networkSettings)) persists it. Seeded from config
+  // once per load — keyed on networkSettingsLoaded, not the array, or every
+  // keystroke would re-seed and fight the cursor.
+  const [ntpServersText, setNtpServersText] = useState("");
+  useEffect(() => {
+    if (networkSettingsLoaded) {
+      setNtpServersText((networkSettings.time_sync_ntp_servers || []).join(", "));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [networkSettingsLoaded]);
+
+  const handleNtpServersChange = (value: string) => {
+    setNtpServersText(value);
+    const servers = value.split(",").map(s => s.trim()).filter(Boolean);
+    setNetworkSettings({ ...networkSettings, time_sync_ntp_servers: servers });
+  };
+
   const handleApplyRequestAddress = useCallback(() => {
     const requested = (networkSettings.ipv4_request_address || "").trim();
     if (!requested) {
@@ -542,49 +560,22 @@ export default function SettingsNetwork() {
               {/*  ])}*/}
               {/*/>*/}
             </SettingsItem>
+            <div className="h-px w-full bg-slate-800/10 dark:bg-slate-300/20" />
+            <SettingsItem
+              title={$at("NTP Servers")}
+              description={$at("Comma-separated NTP servers and pools, tried in order. Leave blank for built-in defaults.")}
+              className={`${isMobile ? "w-full flex-col" : ""}`}
+            >
+              <Input
+                type="text"
+                value={ntpServersText}
+                placeholder="time.cloudflare.com, 0.pool.ntp.org"
+                onChange={e => handleNtpServersChange(e.target.value)}
+                className={isMobile ? "!w-full !h-[36px]" : "!w-[37%] !h-[36px]"}
+              />
+            </SettingsItem>
           </div>
 
-          <div className="space-y-4">
-          <SettingsItem
-            title={$at("HTTP Proxy")}
-            description={$at("Configure program HTTP proxy (optional)")}
-            className={`${isMobile ? "w-full flex-col" : ""}`}
-          >
-            <Input
-              type="text"
-              value={networkSettings.http_proxy || ""}
-              placeholder="http://127.0.0.1:7890"
-              onChange={e => handleProxyChange("http_proxy", e.target.value)}
-              className={isMobile ? "!w-full !h-[36px]" : "!w-[37%] !h-[36px]"}
-            />
-          </SettingsItem>
-          <SettingsItem
-            title={$at("HTTPS Proxy")}
-            description={$at("Configure program HTTPS proxy (optional)")}
-            className={`${isMobile ? "w-full flex-col" : ""}`}
-          >
-            <Input
-              type="text"
-              value={networkSettings.https_proxy || ""}
-              placeholder="http://127.0.0.1:7890"
-              onChange={e => handleProxyChange("https_proxy", e.target.value)}
-              className={isMobile ? "!w-full !h-[36px]" : "!w-[37%] !h-[36px]"}
-            />
-          </SettingsItem>
-          <SettingsItem
-            title={$at("ALL Proxy")}
-            description={$at("Configure program ALL proxy (optional)")}
-            className={`${isMobile ? "w-full flex-col" : ""}`}
-          >
-            <Input
-              type="text"
-              value={networkSettings.all_proxy || ""}
-              placeholder="socks5://127.0.0.1:7890"
-              onChange={e => handleProxyChange("all_proxy", e.target.value)}
-              className={isMobile ? "!w-full !h-[36px]" : "!w-[37%] !h-[36px]"}
-            />
-          </SettingsItem>
-          </div>
           <AntdButton
             type="primary"
             disabled={
@@ -811,6 +802,57 @@ export default function SettingsNetwork() {
               ])}
             />
           </SettingsItem>
+        </div>
+
+        <div className="h-px w-full bg-slate-800/10 dark:bg-slate-300/20" />
+
+        <div className="space-y-4">
+          <SettingsItem
+            title={$at("HTTP Proxy")}
+            description={$at("Configure program HTTP proxy (optional)")}
+            className={`${isMobile ? "w-full flex-col" : ""}`}
+          >
+            <Input
+              type="text"
+              value={networkSettings.http_proxy || ""}
+              placeholder="http://127.0.0.1:7890"
+              onChange={e => handleProxyChange("http_proxy", e.target.value)}
+              className={isMobile ? "!w-full !h-[36px]" : "!w-[37%] !h-[36px]"}
+            />
+          </SettingsItem>
+          <SettingsItem
+            title={$at("HTTPS Proxy")}
+            description={$at("Configure program HTTPS proxy (optional)")}
+            className={`${isMobile ? "w-full flex-col" : ""}`}
+          >
+            <Input
+              type="text"
+              value={networkSettings.https_proxy || ""}
+              placeholder="http://127.0.0.1:7890"
+              onChange={e => handleProxyChange("https_proxy", e.target.value)}
+              className={isMobile ? "!w-full !h-[36px]" : "!w-[37%] !h-[36px]"}
+            />
+          </SettingsItem>
+          <SettingsItem
+            title={$at("ALL Proxy")}
+            description={$at("Configure program ALL proxy (optional)")}
+            className={`${isMobile ? "w-full flex-col" : ""}`}
+          >
+            <Input
+              type="text"
+              value={networkSettings.all_proxy || ""}
+              placeholder="socks5://127.0.0.1:7890"
+              onChange={e => handleProxyChange("all_proxy", e.target.value)}
+              className={isMobile ? "!w-full !h-[36px]" : "!w-[37%] !h-[36px]"}
+            />
+          </SettingsItem>
+          <AntdButton
+            type="primary"
+            onClick={() => setNetworkSettingsRemote(networkSettings)}
+            className={isMobile ? "w-full" : ""}
+          >
+            {$at("Save settings")}
+          </AntdButton>
         </div>
       </Fieldset>
       <ConfirmDialog
