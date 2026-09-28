@@ -70,7 +70,7 @@ export default function LoginLocalRoute() {
 
               <div className="space-y-2 text-center">
                 <h1 className="text-4xl font-semibold text-black dark:text-white">
-                  Welcome back to KVM
+                  Welcome back
                 </h1>
                 <p className="font-medium text-slate-600 dark:text-[#ffffff]">
                   Enter your password to access your KVM.
