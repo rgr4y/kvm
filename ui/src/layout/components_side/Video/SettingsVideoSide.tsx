@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Button as AntdButton , Slider , Checkbox, Select, Modal, InputNumber, Tabs, Typography } from "antd";
+import { Button as AntdButton , Slider , Checkbox, Select, Modal, InputNumber, Tabs, Typography, Collapse } from "antd";
 import { useReactAt } from "i18n-auto-extractor/react";
 import { isMobile } from "react-device-detect";
 
@@ -688,11 +688,13 @@ export default function SettingsVideoSide() {
           </div>
         </div>
 
-        <SettingsItem
-          title={$at("RC Control")}
-          description={$at("Adjust rate control QP settings for better balance between quality and bitrate")}
-        />
-        <div className="space-y-4">
+        <Collapse
+          items={[
+            {
+              key: "rc-control",
+              label: $at("RC Control"),
+              children: (
+                <div className="space-y-4">
           <SettingsItemNew
             title={$at("StepQp")}
             description={String(currentSliders.stepQp)}
@@ -797,7 +799,11 @@ export default function SettingsVideoSide() {
               {$at("Apply")}
             </AntdButton>
           </div>
-        </div>
+                </div>
+              ),
+            },
+          ]}
+        />
       </div>
       <div className={"h-[10vh]"}></div>
 
