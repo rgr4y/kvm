@@ -244,20 +244,20 @@ func rpcSetStreamQualityFactor(factor float64) error {
 	return nil
 }
 
-var streamEncodecType = "avc"
+var streamEncoderType = "avc"
 
-func rpcGetStreamEncodecType() (string, error) {
-	return streamEncodecType, nil
+func rpcGetStreamEncoderType() (string, error) {
+	return streamEncoderType, nil
 }
 
-func rpcSetStreamEncodecType(encodecType string) error {
+func rpcSetStreamEncoderType(encodecType string) error {
 	logger.Info().Str("encodecType", encodecType).Msg("Setting stream encodec type")
 	var _, err = CallCtrlAction("set_video_encodec_type", map[string]interface{}{"encodec_type": encodecType})
 	if err != nil {
 		return err
 	}
 
-	streamEncodecType = encodecType
+	streamEncoderType = encodecType
 	return nil
 }
 
@@ -1992,8 +1992,8 @@ var rpcHandlers = map[string]RPCHandler{
 	"getVpnToolInstallTask":     {Func: rpcGetVpnToolInstallTask, Params: []string{"tool"}},
 	"useVpnToolVersion":         {Func: rpcUseVpnToolVersion, Params: []string{"tool", "version"}},
 	"uninstallVpnToolVersion":   {Func: rpcUninstallVpnToolVersion, Params: []string{"tool", "version"}},
-	"getStreamEncodecType":      {Func: rpcGetStreamEncodecType},
-	"setStreamEncodecType":      {Func: rpcSetStreamEncodecType, Params: []string{"encodecType"}},
+	"getStreamEncoderType":      {Func: rpcGetStreamEncoderType},
+	"setStreamEncoderType":      {Func: rpcSetStreamEncoderType, Params: []string{"encodecType"}},
 	"setVideoRc":                {Func: rpcSetVideoRc, Params: []string{"params"}},
 	"getVideoRc":                {Func: rpcGetVideoRc},
 	"setNpuAppStatus":           {Func: rpcSetNpuAppStatus, Params: []string{"enable"}},

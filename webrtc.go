@@ -291,7 +291,7 @@ func newSession(sessionConfig SessionConfig) (*Session, error) {
 		}
 	})
 
-	if streamEncodecType == "hevc" {
+	if streamEncoderType == "hevc" {
 		session.VideoTrack, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH265}, "video", "kvm")
 	} else {
 		session.VideoTrack, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, "video", "kvm")

@@ -234,7 +234,7 @@ export default function SettingsVideoSide() {
   const [send] = useJsonRpc();
   const [npuAppStatus, setNpuAppStatus] = useState(false);
   const [streamQuality, setStreamQuality] = useState("1");
-  const [streamEncodecType, setStreamEncodecType] = useState("avc");
+  const [streamEncoderType, setStreamEncoderType] = useState("avc");
   const [customEdidValue, setCustomEdidValue] = useState<string | null>(null);
   const [edid, setEdid] = useState<string | null>(null);
   const [edidAudio, setEdidAudio] = useState(false);
@@ -254,7 +254,7 @@ export default function SettingsVideoSide() {
   const videoContrast = useSettingsStore(state => state.videoContrast);
   const setVideoContrast = useSettingsStore(state => state.setVideoContrast);
 
-  const currentCodec: "h264" | "h265" = streamEncodecType === "hevc" ? "h265" : "h264";
+  const currentCodec: "h264" | "h265" = streamEncoderType === "hevc" ? "h265" : "h264";
   const currentSliders = rcSliderValues[currentCodec];
 
   const applySliderToCodec = (codec: RcQpParams, sliders: RcSliderValues): RcQpParams => ({
@@ -383,9 +383,9 @@ export default function SettingsVideoSide() {
       setNpuAppStatus(resp.result as boolean);
     });
 
-    send("getStreamEncodecType", {}, resp => {
+    send("getStreamEncoderType", {}, resp => {
       if ("error" in resp) return;
-      setStreamEncodecType(resp.result as string);
+      setStreamEncoderType(resp.result as string);
     });
 
     send("getStreamQualityFactor", {}, resp => {
@@ -448,8 +448,8 @@ export default function SettingsVideoSide() {
 
   }, [send]);
 
-  const handleStreamEncodecTypeChange = (encodecType: string) => {
-    send("setStreamEncodecType", { encodecType }, resp => {
+  const handleStreamEncoderTypeChange = (encodecType: string) => {
+    send("setStreamEncoderType", { encodecType }, resp => {
       if ("error" in resp) {
         notifications.error(
           `Failed to set stream encodec type: ${resp.error.data || "Unknown error"}`,
@@ -458,7 +458,7 @@ export default function SettingsVideoSide() {
       }
 
       notifications.success(`Stream encodec type set to ${encodecType}`);
-      setStreamEncodecType(encodecType);
+      setStreamEncoderType(encodecType);
       window.location.reload();
     });
   };
@@ -570,17 +570,17 @@ export default function SettingsVideoSide() {
     >
       <div className="space-y-4">
         <SettingsItem
-          title={$at("Encodec Type")}
+          title={$at("Encoder Type")}
           description={""}
         >
           <Select
             className={isMobile ? "w-full bg-transparent" : ""}
-            value={streamEncodecType}
+            value={streamEncoderType}
             options={[
               { value: "avc", label: "H.264 (AVC)" },
               { value: "hevc", label: "H.265 (HEVC)" },
             ]}
-            onChange={e => handleStreamEncodecTypeChange(e)}
+            onChange={e => handleStreamEncoderTypeChange(e)}
           />
         </SettingsItem>
 
@@ -589,7 +589,7 @@ export default function SettingsVideoSide() {
           description={""}
         >
           <Select
-            className={isMobile ? "w-full bg-transparent" : ""}
+            className={isMobile ? "w-full bg-transparent" : "w-1/2"}
             value={streamQuality}
             options={streamQualityOptions}
             onChange={e => handleStreamQualityChange(e)}
