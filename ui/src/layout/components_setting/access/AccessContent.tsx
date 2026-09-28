@@ -152,6 +152,10 @@ export interface TLSState {
   domain?: string;
   commonName?: string;
   notAfter?: string;
+  issuer?: string;
+  notBefore?: string;
+  sans?: string[];
+  serialNumber?: string;
 }
 
 const loader = async () => {
@@ -190,7 +194,12 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
   const [tlsDomain, setTlsDomain] = useState<string>("");
   const [tlsCommonName, setTlsCommonName] = useState<string>("");
   const [tlsNotAfter, setTlsNotAfter] = useState<string>("");
+  const [tlsIssuer, setTlsIssuer] = useState<string>("");
+  const [tlsNotBefore, setTlsNotBefore] = useState<string>("");
+  const [tlsSans, setTlsSans] = useState<string[]>([]);
+  const [tlsSerialNumber, setTlsSerialNumber] = useState<string>("");
   const [tlsHasStoredCert, setTlsHasStoredCert] = useState<boolean>(false);
+  const [tlsEditingPem, setTlsEditingPem] = useState<boolean>(false);
 
   const [activeTab, setActiveTab] = useState("tailscale");
   const [vpnAutoStartStatusMap, setVpnAutoStartStatusMap] = useState<Record<string, VpnAutoStartStatusResponse>>({});
@@ -318,7 +327,12 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
       setTlsDomain(tlsState.domain ?? "");
       setTlsCommonName(tlsState.commonName ?? "");
       setTlsNotAfter(tlsState.notAfter ?? "");
+      setTlsIssuer(tlsState.issuer ?? "");
+      setTlsNotBefore(tlsState.notBefore ?? "");
+      setTlsSans(tlsState.sans ?? []);
+      setTlsSerialNumber(tlsState.serialNumber ?? "");
       setTlsHasStoredCert(!!tlsState.certificate);
+      setTlsEditingPem(false);
       if (tlsState.certificate) setTlsCert(tlsState.certificate);
       if (tlsState.privateKey) setTlsKey(tlsState.privateKey);
     });
@@ -873,7 +887,12 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
         setTlsDomain(tlsState.domain ?? "");
         setTlsCommonName(tlsState.commonName ?? "");
         setTlsNotAfter(tlsState.notAfter ?? "");
+        setTlsIssuer(tlsState.issuer ?? "");
+        setTlsNotBefore(tlsState.notBefore ?? "");
+        setTlsSans(tlsState.sans ?? []);
+        setTlsSerialNumber(tlsState.serialNumber ?? "");
         setTlsHasStoredCert(!!tlsState.certificate);
+        setTlsEditingPem(false);
         if (tlsState.certificate) setTlsCert(tlsState.certificate);
         if (tlsState.privateKey) setTlsKey(tlsState.privateKey);
       }
@@ -1693,199 +1712,7 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
 
       {loaderData?.authMode && (
         <>
-          <div className="space-y-4">
-            <SettingsSectionHeader
-              title={$at("Local")}
-              description={$at("Manage the mode of local access to the device")}
-            />
-            <>
-              <SettingsItem
-                title={$at("HTTPS Mode")}
-                description={$at("Configure secure HTTPS access to your device")}
-              >
-                <Select
-                  className={isMobile ? "!w-full !h-[36px]" : "!w-[28%] !h-[36px]"}
-                  value={tlsMode===""?"disabled":tlsMode}
-                  onChange={e => handleTlsModeChange(e)}
-                  options={[
-                    { value: "disabled", label: "Disabled" },
-                    { value: "self-signed", label: "Self-signed" },
-                    { value: "custom", label: "Custom" },
-                  ]}
-                />
-              </SettingsItem>
-
-              {tlsMode === "custom" && (
-                <div className="mt-4 space-y-4">
-                  <SettingsItem
-                    title={$at("Certificate Source")}
-                    description={$at("Choose how the TLS certificate is provided")}
-                  >
-                    <Select
-                      className={isMobile ? "!w-full !h-[36px]" : "!w-[28%] !h-[36px]"}
-                      value={tlsSource}
-                      onChange={e => handleTlsSourceChange(e)}
-                      options={[
-                        { value: "pem", label: "Paste PEM" },
-                        { value: "tailscale", label: "Tailscale" },
-                      ]}
-                    />
-                  </SettingsItem>
-
-                  {tlsSource === "pem" ? (
-                    <>
-                      <div className="space-y-4">
-                        <SettingsItem
-                          title={$at("TLS Certificate")}
-                          description={$at("Paste your TLS certificate below. For certificate chains, include the entire chain (leaf, intermediate, and root certificates).")}
-                        />
-                        <div className="space-y-4">
-                          <TextAreaWithLabel
-                            label={$at("Certificate")}
-                            rows={3}
-                            placeholder={
-                              $at("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----")
-                            }
-                            value={tlsCert}
-                            onChange={e => handleTlsCertChange(e.target.value)}
-                          />
-                        </div>
-
-                        <div className="space-y-4">
-                          <div className="space-y-4">
-                            <TextAreaWithLabel
-                              label={$at("Private Key")}
-                              description={$at("For security reasons, it will not be displayed after saving.")}
-                              rows={3}
-                              placeholder={
-                                $at("-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----")
-                              }
-                              value={tlsKey}
-                              onChange={e => handleTlsKeyChange(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-x-2">
-                        <Button
-                          size="SM"
-                          theme="primary"
-                          text={$at("Update TLS Settings")}
-                          onClick={handleCustomTlsUpdate}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <SettingsItem
-                        title={$at("Tailscale Certificate")}
-                        description={$at("The certificate is issued for this device's Tailscale domain and renewed automatically. Requires an active Tailscale connection.")}
-                      />
-                      <div className="space-y-2 rounded-md border border-slate-200 p-4 text-sm dark:border-slate-700">
-                        <div>
-                          <span className="font-medium">{$at("Domain")}: </span>
-                          {tlsDomain || (
-                            <span className="text-red-600 dark:text-red-400">
-                              {$at("Tailscale not connected")}
-                            </span>
-                          )}
-                        </div>
-                        {tlsHasStoredCert ? (
-                          <>
-                            <div>
-                              <span className="font-medium">{$at("Common Name")}: </span>
-                              {tlsCommonName || "—"}
-                            </div>
-                            <div>
-                              <span className="font-medium">{$at("Expires")}: </span>
-                              {tlsNotAfter ? new Date(tlsNotAfter).toLocaleString() : "—"}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-slate-500 dark:text-slate-400">
-                            {$at("No certificate issued yet.")}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-x-2">
-                        <Button
-                          size="SM"
-                          theme="primary"
-                          text={tlsHasStoredCert ? $at("Renew Certificate") : $at("Issue Certificate")}
-                          onClick={handleIssueTailscaleCert}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <SettingsItem
-                title={$at("Authentication Mode")}
-                description={`${$at("Current mode:")} ${loaderData.authMode === "password" ? $at("Password protected") : $at("No password")}`}
-              >
-                {loaderData.authMode === "password" ? (
-                  <AntdButton
-                    type="primary"
-                    onClick={() => {
-                      setModalView("deletePassword");
-                      setOpenDialog(true);
-                    }}
-                    className={isMobile ? "w-full" : ""}
-                  >{$at("Disable Protection")}</AntdButton>
-                ) : (
-                  <AntdButton
-                    type="primary"
-                    onClick={() => {
-                      setModalView("createPassword");
-                      setOpenDialog(true);  
-                    }}
-                    className={isMobile ? "w-full" : ""}
-                  >{$at("Enable Password")}</AntdButton>
-                )}
-              </SettingsItem>
-            </>
-
-            {loaderData.authMode === "password" && (
-              <SettingsItem
-                title={$at("Change Password")}
-                description={$at("Update your device access password")}
-              >
-                <AntdButton
-                  type="primary"
-                  onClick={() => {
-                    setModalView("updatePassword");
-                    setOpenDialog(true);
-                  }}
-                  className={isMobile ? "w-full" : ""}
-                  >
-                    {$at("Change Password")}
-                  </AntdButton>
-              </SettingsItem>
-            )}
-
-            <FirewallSettings />
-
-          </div>
-          <div className="h-px w-full bg-slate-800/10 dark:bg-slate-300/20" />
-        </>
-      )}
-
-      <div className="space-y-4">
-        <SettingsSectionHeader
-          title={$at("WebRTC Servers")}
-          description={$at("STUN and TURN servers used for peer connections")}
-        />
-        <GridCard>
-          <AutoHeight>
-            <div className="space-y-4 p-4">
-              <WebRtcServersSettings />
-            </div>
-          </AutoHeight>
-        </GridCard>
-      </div>
-
-      <div className="space-y-4">
+ <div className="space-y-4">
         <SettingsSectionHeader
           title={$at("Remote")}
           description={$at("Manage the mode of Remote access to the device")}
@@ -3008,7 +2835,255 @@ function AccessContent({ setOpenDialog }: { setOpenDialog: (open: boolean) => vo
 
 
     </div>
-    </div>
+ 
+          <div className="space-y-4">
+            <SettingsSectionHeader
+              title={$at("Local")}
+              description={$at("Manage the mode of local access to the device")}
+            />
+            <>
+              <SettingsItem
+                title={$at("HTTPS Mode")}
+                description={$at("Configure secure HTTPS access to your device")}
+              >
+                <Select
+                  className={isMobile ? "!w-full !h-[36px]" : "!w-[28%] !h-[36px]"}
+                  value={tlsMode===""?"disabled":tlsMode}
+                  onChange={e => handleTlsModeChange(e)}
+                  options={[
+                    { value: "disabled", label: "Disabled" },
+                    { value: "self-signed", label: "Self-signed" },
+                    { value: "custom", label: "Custom" },
+                  ]}
+                />
+              </SettingsItem>
+
+              {tlsMode === "custom" && (
+                <div className="mt-4 space-y-4">
+                  <SettingsItem
+                    title={$at("Certificate Source")}
+                    description={$at("Choose how the TLS certificate is provided")}
+                  >
+                    <Select
+                      className={isMobile ? "!w-full !h-[36px]" : "!w-[28%] !h-[36px]"}
+                      value={tlsSource}
+                      onChange={e => handleTlsSourceChange(e)}
+                      options={[
+                        { value: "pem", label: "Paste PEM" },
+                        { value: "tailscale", label: "Tailscale" },
+                      ]}
+                    />
+                  </SettingsItem>
+
+                  {tlsSource === "pem" ? (
+                    tlsHasStoredCert && !tlsEditingPem ? (
+                      <>
+                        <SettingsItem
+                          title={$at("TLS Certificate")}
+                          description={$at("A certificate is installed. Details of the leaf certificate are shown below.")}
+                        />
+                        <div className="space-y-2 rounded-md border border-slate-200 p-4 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                          <div>
+                            <span className="font-medium">{$at("Common Name")}: </span>
+                            {tlsCommonName || "—"}
+                          </div>
+                          {tlsSans.length > 0 && (
+                            <div>
+                              <span className="font-medium">{$at("Subject Alt Names")}: </span>
+                              {tlsSans.join(", ")}
+                            </div>
+                          )}
+                          <div>
+                            <span className="font-medium">{$at("Issuer")}: </span>
+                            {tlsIssuer || "—"}
+                          </div>
+                          <div>
+                            <span className="font-medium">{$at("Valid From")}: </span>
+                            {tlsNotBefore ? new Date(tlsNotBefore).toLocaleString() : "—"}
+                          </div>
+                          <div>
+                            <span className="font-medium">{$at("Expires")}: </span>
+                            {tlsNotAfter ? new Date(tlsNotAfter).toLocaleString() : "—"}
+                          </div>
+                          {tlsSerialNumber && (
+                            <div className="break-all">
+                              <span className="font-medium">{$at("Serial Number")}: </span>
+                              {tlsSerialNumber}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-x-2">
+                          <Button
+                            size="SM"
+                            theme="light"
+                            text={$at("Edit")}
+                            onClick={() => setTlsEditingPem(true)}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                    <>
+                      <div className="space-y-4">
+                        <SettingsItem
+                          title={$at("TLS Certificate")}
+                          description={$at("Paste your TLS certificate below. For certificate chains, include the entire chain (leaf, intermediate, and root certificates).")}
+                        />
+                        <div className="space-y-4">
+                          <TextAreaWithLabel
+                            label={$at("Certificate")}
+                            rows={3}
+                            placeholder={
+                              $at("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----")
+                            }
+                            value={tlsCert}
+                            onChange={e => handleTlsCertChange(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="space-y-4">
+                            <TextAreaWithLabel
+                              label={$at("Private Key")}
+                              description={$at("For security reasons, it will not be displayed after saving.")}
+                              rows={3}
+                              placeholder={
+                                $at("-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----")
+                              }
+                              value={tlsKey}
+                              onChange={e => handleTlsKeyChange(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-x-2">
+                        <Button
+                          size="SM"
+                          theme="primary"
+                          text={$at("Update TLS Settings")}
+                          onClick={handleCustomTlsUpdate}
+                        />
+                        {tlsHasStoredCert && (
+                          <Button
+                            size="SM"
+                            theme="light"
+                            text={$at("Cancel")}
+                            onClick={() => setTlsEditingPem(false)}
+                          />
+                        )}
+                      </div>
+                    </>
+                    )
+                  ) : (
+                    <>
+                      <SettingsItem
+                        title={$at("Tailscale Certificate")}
+                        description={$at("The certificate is issued for this device's Tailscale domain and renewed automatically. Requires an active Tailscale connection.")}
+                      />
+                      <div className="space-y-2 rounded-md border border-slate-200 p-4 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                        <div>
+                          <span className="font-medium">{$at("Domain")}: </span>
+                          {tlsDomain || (
+                            <span className="text-red-600 dark:text-red-400">
+                              {$at("Tailscale not connected")}
+                            </span>
+                          )}
+                        </div>
+                        {tlsHasStoredCert ? (
+                          <>
+                            <div>
+                              <span className="font-medium">{$at("Common Name")}: </span>
+                              {tlsCommonName || "—"}
+                            </div>
+                            <div>
+                              <span className="font-medium">{$at("Expires")}: </span>
+                              {tlsNotAfter ? new Date(tlsNotAfter).toLocaleString() : "—"}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {$at("No certificate issued yet.")}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-x-2">
+                        <Button
+                          size="SM"
+                          theme="primary"
+                          text={tlsHasStoredCert ? $at("Renew Certificate") : $at("Issue Certificate")}
+                          onClick={handleIssueTailscaleCert}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <SettingsItem
+                title={$at("Authentication Mode")}
+                description={`${$at("Current mode:")} ${loaderData.authMode === "password" ? $at("Password protected") : $at("No password")}`}
+              >
+                {loaderData.authMode === "password" ? (
+                  <AntdButton
+                    type="primary"
+                    onClick={() => {
+                      setModalView("deletePassword");
+                      setOpenDialog(true);
+                    }}
+                    className={isMobile ? "w-full" : ""}
+                  >{$at("Disable Protection")}</AntdButton>
+                ) : (
+                  <AntdButton
+                    type="primary"
+                    onClick={() => {
+                      setModalView("createPassword");
+                      setOpenDialog(true);  
+                    }}
+                    className={isMobile ? "w-full" : ""}
+                  >{$at("Enable Password")}</AntdButton>
+                )}
+              </SettingsItem>
+            </>
+
+            {loaderData.authMode === "password" && (
+              <SettingsItem
+                title={$at("Change Password")}
+                description={$at("Update your device access password")}
+              >
+                <AntdButton
+                  type="primary"
+                  onClick={() => {
+                    setModalView("updatePassword");
+                    setOpenDialog(true);
+                  }}
+                  className={isMobile ? "w-full" : ""}
+                  >
+                    {$at("Change Password")}
+                  </AntdButton>
+              </SettingsItem>
+            )}
+
+            <FirewallSettings />
+
+          </div>
+          <div className="h-px w-full bg-slate-800/10 dark:bg-slate-300/20" />
+        </>
+      )}
+
+      <div className="space-y-4">
+        <SettingsSectionHeader
+          title={$at("WebRTC Servers")}
+          description={$at("STUN and TURN servers used for peer connections")}
+        />
+        <GridCard>
+          <AutoHeight>
+            <div className="space-y-4 p-4">
+              <WebRtcServersSettings />
+            </div>
+          </AutoHeight>
+        </GridCard>
+      </div>
+
+        </div>
   );
 }
 

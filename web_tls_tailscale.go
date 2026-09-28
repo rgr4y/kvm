@@ -117,6 +117,7 @@ func issueTailscaleCert() error {
 		websecureLogger.Warn().Err(warnErr).Str("dnsName", dnsName).Msg("tailscale certificate hostname warning")
 	}
 
+	config.TLSCertSummary = nil // cert changed; re-parse on next read
 	websecureLogger.Info().Str("dnsName", dnsName).Msg("issued and stored tailscale certificate")
 	return nil
 }

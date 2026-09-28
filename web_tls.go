@@ -40,6 +40,41 @@ type TLSState struct {
 	// CommonName and NotAfter are read-only summary fields of the stored custom cert.
 	CommonName string `json:"commonName,omitempty"`
 	NotAfter   string `json:"notAfter,omitempty"` // RFC3339
+	// Additional read-only parsed summary fields of the stored custom cert leaf.
+	Issuer       string   `json:"issuer,omitempty"`
+	NotBefore    string   `json:"notBefore,omitempty"` // RFC3339
+	SANs         []string `json:"sans,omitempty"`
+	SerialNumber string   `json:"serialNumber,omitempty"`
+}
+
+// TLSCertSummary is the parsed, cached readout of the stored custom cert leaf.
+// Cached in config so getTLSState does not re-parse x509 on every call.
+type TLSCertSummary struct {
+	CommonName   string   `json:"common_name,omitempty"`
+	NotAfter     string   `json:"not_after,omitempty"` // RFC3339
+	Issuer       string   `json:"issuer,omitempty"`
+	NotBefore    string   `json:"not_before,omitempty"` // RFC3339
+	SANs         []string `json:"sans,omitempty"`
+	SerialNumber string   `json:"serial_number,omitempty"`
+}
+
+// parseCertSummary parses a DER leaf into a cached summary. nil on failure.
+func parseCertSummary(der []byte) *TLSCertSummary {
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil
+	}
+	sum := &TLSCertSummary{
+		CommonName: leaf.Subject.CommonName,
+		NotAfter:   leaf.NotAfter.UTC().Format(time.RFC3339),
+		Issuer:     leaf.Issuer.CommonName,
+		NotBefore:  leaf.NotBefore.UTC().Format(time.RFC3339),
+		SANs:       leaf.DNSNames,
+	}
+	if leaf.SerialNumber != nil {
+		sum.SerialNumber = leaf.SerialNumber.String()
+	}
+	return sum
 }
 
 func initCertStore() {
@@ -106,12 +141,23 @@ func getTLSState() TLSState {
 			}
 			s.Certificate = string(certPEM)
 
-			// Parse leaf for the summary fields (CN + expiration).
-			if len(cert.Certificate) > 0 {
-				if leaf, err := x509.ParseCertificate(cert.Certificate[0]); err == nil {
-					s.CommonName = leaf.Subject.CommonName
-					s.NotAfter = leaf.NotAfter.UTC().Format(time.RFC3339)
+			// Use the cached summary; parse once (first time / after cache cleared)
+			// and persist so later getTLSState calls skip x509 parsing.
+			if config.TLSCertSummary == nil && len(cert.Certificate) > 0 {
+				if sum := parseCertSummary(cert.Certificate[0]); sum != nil {
+					config.TLSCertSummary = sum
+					if err := SaveConfig(); err != nil {
+						websecureLogger.Warn().Err(err).Msg("failed to persist TLS cert summary cache")
+					}
 				}
+			}
+			if sum := config.TLSCertSummary; sum != nil {
+				s.CommonName = sum.CommonName
+				s.NotAfter = sum.NotAfter
+				s.Issuer = sum.Issuer
+				s.NotBefore = sum.NotBefore
+				s.SANs = sum.SANs
+				s.SerialNumber = sum.SerialNumber
 			}
 		}
 	case "self-signed":
@@ -132,6 +178,7 @@ func setTLSState(s TLSState) error {
 			isChanged = true
 		}
 		config.TLSMode = ""
+		config.TLSCertSummary = nil
 	case "custom":
 		if config.TLSMode == "" {
 			isChanged = true
@@ -144,6 +191,7 @@ func setTLSState(s TLSState) error {
 				return fmt.Errorf("failed to issue tailscale certificate: %w", err)
 			}
 			config.TLSCustomSource = tlsCustomSourceTailscale
+			config.TLSCertSummary = nil // new cert issued; re-parse on next read
 			startTailscaleCertRenewal()
 		default:
 			// parse pem to cert and key
@@ -153,6 +201,7 @@ func setTLSState(s TLSState) error {
 				return fmt.Errorf("failed to save certificate: %w", err)
 			}
 			config.TLSCustomSource = tlsCustomSourcePEM
+			config.TLSCertSummary = nil // new cert uploaded; re-parse on next read
 		}
 		config.TLSMode = "custom"
 	case "self-signed":

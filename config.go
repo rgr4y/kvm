@@ -110,6 +110,7 @@ type Config struct {
 	DisplayOffAfterSec         int                    `json:"display_off_after_sec"`
 	TLSMode                    string                 `json:"tls_mode"`          // options: "self-signed", "user-defined", ""
 	TLSCustomSource            string                 `json:"tls_custom_source"` // when TLSMode=="custom": "pem" (pasted) or "tailscale" (auto-issued)
+	TLSCertSummary             *TLSCertSummary        `json:"tls_cert_summary,omitempty"` // cached parsed readout of the stored custom cert leaf
 	UsbConfig                  *usbgadget.Config      `json:"usb_config"`
 	UsbDevices                 *usbgadget.Devices     `json:"usb_devices"`
 	NetworkConfig              *network.NetworkConfig `json:"network_config"`
