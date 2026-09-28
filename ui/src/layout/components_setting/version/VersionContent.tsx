@@ -51,6 +51,7 @@ type SignatureStatus = {
   appSignatureInvalid: boolean;
   appNoPublicKey: boolean;
   signatureVerified: boolean;
+  devBuild?: boolean;
 };
 
 type UploadLocalPackageOptions = {
@@ -111,6 +112,8 @@ export default function SettingsVersion() {
   const [signatureStatusLoading, setSignatureStatusLoading] = useState(false);
   const [signatureStatusChecked, setSignatureStatusChecked] = useState(false);
   const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null);
+  const [devBuild, setDevBuild] = useState(false);
+  const [updatesEnabled, setUpdatesEnabled] = useState(true);
   const updatePanelRef = useRef<HTMLDivElement | null>(null);
   const [customUpdateBaseURL, setCustomUpdateBaseURL] = useState("");
   const [updateDownloadProxy, setUpdateDownloadProxy] = useState("");
@@ -120,6 +123,15 @@ export default function SettingsVersion() {
     if (!appVersion || !systemVersion) return null;
     return { appVersion, systemVersion };
   });
+
+  useEffect(() => {
+    send("getSelfSignatureStatus", {}, resp => {
+      if ("error" in resp) return;
+      const r = resp.result as { devBuild?: boolean; updatesEnabled?: boolean };
+      setDevBuild(!!r.devBuild);
+      setUpdatesEnabled(r.updatesEnabled !== false);
+    });
+  }, [send]);
 
   useEffect(() => {
     send("getCustomUpdateBaseURL", {}, resp => {
@@ -176,6 +188,7 @@ export default function SettingsVersion() {
       const noPublicKey = sigStatus.appNoPublicKey;
       const signatureVerified = hasSigFiles && !noPublicKey && !sigStatus.appSignatureInvalid;
       setSignatureStatus({ ...sigStatus, signatureVerified });
+      setDevBuild(!!sigStatus.devBuild);
     });
   }, [send]);
 
@@ -351,6 +364,16 @@ export default function SettingsVersion() {
             />
           )}
 
+            {!updatesEnabled ? null : devBuild ? (
+              <div className="rounded-md border border-amber-500 bg-amber-50 p-3 dark:border-amber-600 dark:bg-amber-900/30">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  {$at("Development build")}
+                </p>
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                  {$at("This is a development build. OTA updates and signature changes are disabled. Flash a release build to enable updates.")}
+                </p>
+              </div>
+            ) : (
             <>
               <UpdateSourceSettings
                 updateSource={updateSource}
@@ -390,6 +413,7 @@ export default function SettingsVersion() {
                 </div>
               )}
             </>
+            )}
 
           {isUpdateDialogOpen && (
             <div ref={updatePanelRef} className="pt-2">

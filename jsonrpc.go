@@ -501,6 +501,12 @@ type SelfSignatureStatus struct {
 	AppSignatureAbsent  bool `json:"appSignatureAbsent,omitempty"`
 	AppSignatureInvalid bool `json:"appSignatureInvalid,omitempty"`
 	AppNoPublicKey      bool `json:"appNoPublicKey,omitempty"`
+	// DevBuild is true for development builds (git-hash version). Dev builds
+	// block OTA apply and signature overwrite; the UI hides those actions.
+	DevBuild bool `json:"devBuild,omitempty"`
+	// UpdatesEnabled is false when the OTA update feature is compiled out.
+	// The UI hides the entire update section when false.
+	UpdatesEnabled bool `json:"updatesEnabled"`
 }
 
 func rpcGetSelfSignatureStatus() (*SelfSignatureStatus, error) {
@@ -509,6 +515,8 @@ func rpcGetSelfSignatureStatus() (*SelfSignatureStatus, error) {
 
 func getSelfSignatureStatus() *SelfSignatureStatus {
 	status := &SelfSignatureStatus{}
+	status.DevBuild = isDevBuild()
+	status.UpdatesEnabled = updatesEnabled()
 	publicKey := getOTAPublicKey()
 
 	appBinPath := "/userdata/picokvm/bin/kvm_app"

@@ -4,6 +4,10 @@
 VERSION     ?= 0.2.0
 VERSION_DEV ?= $(VERSION)-$(shell git rev-parse --short HEAD)
 
+# Set to false to compile out the OTA update UI + RPCs (for forks that never
+# track upstream releases).
+UPDATES_ENABLED ?= true
+
 # ──────────────────────────────────────────────
 # Device (override any of these on the command line)
 # ──────────────────────────────────────────────
@@ -41,7 +45,8 @@ GO_LDFLAGS := \
   -X $(PROMETHEUS_TAG).BuildDate=$(BUILDDATE) \
   -X $(PROMETHEUS_TAG).Revision=$(REVISION) \
   -X $(KVM_PKG_NAME).builtTimestamp=$(BUILDTS) \
-  -X $(KVM_PKG_NAME).builtOtaPublicKey=$(OTA_PUBLIC_KEY)
+  -X $(KVM_PKG_NAME).builtOtaPublicKey=$(OTA_PUBLIC_KEY) \
+  -X $(KVM_PKG_NAME).builtUpdatesEnabled=$(UPDATES_ENABLED)
 
 GO_CMD  := GOOS=linux GOARCH=arm GOARM=7 go
 BIN_DIR := $(shell pwd)/bin

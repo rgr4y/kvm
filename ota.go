@@ -136,6 +136,16 @@ const cdnUpdateBaseURL = "https://cdn.picokvm.top/luckfox_picokvm_firmware/laste
 
 var builtAppVersion = "0.1.4+dev"
 
+// builtUpdatesEnabled is stamped at build time (ldflags). When not "true" the
+// OTA update UI is hidden and update/signature RPCs are refused. Forks that
+// never track upstream releases build with this off.
+var builtUpdatesEnabled = "true"
+
+// updatesEnabled reports whether OTA update features are compiled in.
+func updatesEnabled() bool {
+	return strings.EqualFold(strings.TrimSpace(builtUpdatesEnabled), "true")
+}
+
 var (
 	updateSource        = "github"
 	customUpdateBaseURL string
@@ -161,6 +171,22 @@ func rpcSetUpdateSource(source string) error {
 	}
 	updateSource = source
 	return nil
+}
+
+// isDevBuild reports whether the running binary is a development build rather
+// than a clean tagged release. build_dev stamps VERSION_DEV, which carries a
+// prerelease segment (git short hash, e.g. 0.2.0-f89f2a1, or "dev") and/or
+// build metadata (e.g. 0.1.4+dev). Release builds (build_release) stamp the
+// clean VERSION (e.g. 0.2.0) with no prerelease or metadata.
+// Dev builds must not apply OTA updates or overwrite their own signature: the
+// on-disk binary is unsigned and does not match any published release.
+func isDevBuild() bool {
+	v, err := semver.NewVersion(builtAppVersion)
+	if err != nil {
+		// Unparseable version is not a trusted release; treat as dev.
+		return true
+	}
+	return v.Prerelease() != "" || v.Metadata() != ""
 }
 
 func GetLocalVersion() (systemVersion *semver.Version, appVersion *semver.Version, err error) {
@@ -1516,6 +1542,12 @@ func cleanupStaleLocalPackageOnStartup() {
 }
 
 func TryUpdate(ctx context.Context, deviceId string) error {
+	if !updatesEnabled() {
+		return fmt.Errorf("OTA updates are disabled in this build")
+	}
+	if isDevBuild() {
+		return fmt.Errorf("refusing to apply update on a development build (%s); flash a release build instead", builtAppVersion)
+	}
 	if !otaUploadMutex.TryLock() {
 		return fmt.Errorf("upload in progress, cannot start update")
 	}
@@ -1931,6 +1963,16 @@ type SignatureUpdateResult struct {
 
 func UpdateSignatures(ctx context.Context) (*SignatureUpdateResult, error) {
 	result := &SignatureUpdateResult{}
+
+	if !updatesEnabled() {
+		result.Error = "OTA updates are disabled in this build"
+		return result, fmt.Errorf("OTA updates are disabled in this build")
+	}
+
+	if isDevBuild() {
+		result.Error = fmt.Sprintf("refusing to overwrite signature on a development build (%s)", builtAppVersion)
+		return result, fmt.Errorf("refusing to overwrite signature on a development build (%s)", builtAppVersion)
+	}
 
 	remoteMetadata, err := fetchUpdateMetadata(ctx, "")
 	if err != nil {
